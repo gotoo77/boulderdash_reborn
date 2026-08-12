@@ -46,6 +46,32 @@ endfunction()
 set(BOULDERDASH_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets")
 set(BOULDERDASH_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cfg")
 
+# Les six SFX rétro synthétisés sont des artefacts générés. Leur source de
+# vérité est le synthétiseur Python versionné ; les WAV ne sont volontairement
+# plus suivis par Git.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(BOULDERDASH_RETRO_SFX_GENERATOR
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_retro_sfx.py"
+)
+set(BOULDERDASH_GENERATED_SFX
+    "${BOULDERDASH_ASSET_DIR}/sfx/walk.wav"
+    "${BOULDERDASH_ASSET_DIR}/sfx/dig.wav"
+    "${BOULDERDASH_ASSET_DIR}/sfx/rock_fall.wav"
+    "${BOULDERDASH_ASSET_DIR}/sfx/diamond.wav"
+    "${BOULDERDASH_ASSET_DIR}/sfx/death.wav"
+    "${BOULDERDASH_ASSET_DIR}/sfx/diamond_fall.wav"
+)
+add_custom_command(
+    OUTPUT ${BOULDERDASH_GENERATED_SFX}
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BOULDERDASH_ASSET_DIR}/sfx"
+    COMMAND ${Python3_EXECUTABLE} ${BOULDERDASH_RETRO_SFX_GENERATOR}
+        --output-dir "${BOULDERDASH_ASSET_DIR}/sfx"
+    DEPENDS ${BOULDERDASH_RETRO_SFX_GENERATOR}
+    COMMENT "Generating original retro SFX"
+    VERBATIM
+)
+add_custom_target(boulderdash_retro_sfx DEPENDS ${BOULDERDASH_GENERATED_SFX})
+
 # --------------------------------------------------
 # Dépendances desktop UNIQUEMENT
 # --------------------------------------------------
@@ -131,6 +157,7 @@ add_executable(${BD_BIN}
     src/util/Translator.cpp
 )
 
+add_dependencies(${BD_BIN} boulderdash_retro_sfx)
 target_include_directories(${BD_BIN} PRIVATE src)
 boulderdash_enable_warnings(${BD_BIN})
 boulderdash_enable_sanitizers(${BD_BIN})
@@ -150,6 +177,7 @@ if (EMSCRIPTEN)
         "${BOULDERDASH_ASSET_DIR}/*"
         "${BOULDERDASH_CONFIG_DIR}/*"
     )
+    list(APPEND BOULDERDASH_PRELOAD_FILES ${BOULDERDASH_GENERATED_SFX})
     set_property(TARGET ${BD_BIN} APPEND PROPERTY LINK_DEPENDS
         "${BOULDERDASH_PRELOAD_FILES}"
     )
@@ -220,6 +248,7 @@ if (BUILD_TESTING)
         src/menu/MockMenuRenderer.cpp
         src/util/Config.cpp
     )
+    add_dependencies(boulderdash_tests boulderdash_retro_sfx)
     target_include_directories(boulderdash_tests PRIVATE src tests)
     boulderdash_enable_warnings(boulderdash_tests)
     boulderdash_enable_sanitizers(boulderdash_tests)

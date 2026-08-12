@@ -33,5 +33,12 @@ core.*
 /assets/sfx/game-over-deep-male-voice-clip-352695.mp3
 /assets/sfx/bd_blob.wav
 /assets/sfx/diamond0.wav
-/assets/sfx/diamond_fall.wav
 /assets/sfx/dig0.wav
+
+# Retro SFX generated reproducibly by tools/generate_retro_sfx.py
+/assets/sfx/walk.wav
+/assets/sfx/dig.wav
+/assets/sfx/rock_fall.wav
+/assets/sfx/diamond.wav
+/assets/sfx/death.wav
+/assets/sfx/diamond_fall.wav
