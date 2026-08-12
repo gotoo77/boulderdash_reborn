@@ -6,7 +6,8 @@ Dernière mise à jour : 12 août 2026.
 
 Le projet est un prototype jouable sur desktop. Le build natif, les tests et la
 cible WebAssembly sont opérationnels. Le build Web a été reconstruit avec
-Emscripten 6.0.6, puis le menu et le premier niveau ont été chargés dans Firefox.
+Emscripten 6.0.6, puis le menu et le premier niveau ont été chargés dans Firefox
+et par le smoke test Chromium automatisé.
 
 | Domaine | État | Validation actuelle |
 | --- | --- | --- |
@@ -16,11 +17,11 @@ Emscripten 6.0.6, puis le menu et le premier niveau ont été chargés dans Fire
 | Données de niveaux | ✅ Contrôlées | Dimensions, bordures, joueur et sortie validés automatiquement |
 | Traductions | ✅ Contrôlées | Parité des clés EN/FR/JP validée automatiquement |
 | Exécution desktop | ✅ Vérifiée | Démarrage headless avec chargement des assets |
-| Packaging Web | ✅ Vérifié | Build Emscripten 6.0.6, menu et niveau 1 rendus dans Firefox avec `assets/` et `cfg/` |
+| Packaging Web | ✅ Vérifié | Build Emscripten 6.0.6, menu et niveau 1 rendus dans Firefox et Chromium avec `assets/` et `cfg/` |
 | Outils Python/Conan | ✅ Reproductibles | UV, Python 3.12, Conan 2.31.2 et Pillow sont verrouillés |
 | Gestion de versions | ✅ Active | `main` suit `origin/main` et l’état initial est publié |
 | Visibilité GitHub | ✅ Privée | `gotoo77/boulderdash_reborn` est privé pendant l’audit des assets |
-| CI | ⬜ À faire | Aucun workflow automatique |
+| CI | 🟡 Prête localement | Workflow desktop + Web/Chromium ajouté ; première exécution GitHub à confirmer |
 
 ## Terminé — fiabilisation initiale
 
@@ -56,12 +57,12 @@ Objectif : tout changement doit être compilé et testé automatiquement.
 - [x] Publier le premier état sur le dépôt GitHub privé avec la licence MIT et
   l’avertissement de provenance des assets.
 - [x] Réinstaller Conan avec le Python actif et régénérer ses fichiers CMake.
-- [ ] Ajouter une CI Linux qui exécute Conan, CMake, le build et CTest.
-- [ ] Documenter ou fournir un profil Conan Emscripten.
+- [x] Ajouter une CI Linux qui exécute Conan, CMake, le build et CTest.
+- [x] Documenter ou fournir un profil Conan Emscripten.
 - [x] Reconstruire la cible Web et vérifier que `/assets` et `/cfg` sont présents
   dans le fichier `.data`.
-- [ ] Automatiser en CI le smoke test navigateur du menu et d’un niveau.
-- [ ] Activer les avertissements compilateur (`-Wall -Wextra -Wpedantic`) dans
+- [x] Automatiser en CI le smoke test navigateur du menu et d’un niveau.
+- [x] Activer les avertissements compilateur (`-Wall -Wextra -Wpedantic`) dans
   la CI, puis les traiter sans masquer les diagnostics.
 
 Critère de sortie : un clone vierge produit les builds desktop et Web documentés,

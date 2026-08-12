@@ -57,6 +57,35 @@ enum class ScreenState {
     GameOver,
 };
 
+#ifdef __EMSCRIPTEN__
+EM_JS(void, reportWebState, (const char* state), {
+    Module['boulderdashState'] = UTF8ToString(state);
+});
+#else
+void reportWebState(const char*) {
+}
+#endif
+
+void reportWebState(ScreenState state) {
+    switch (state) {
+    case ScreenState::Menu:
+        reportWebState("menu");
+        break;
+    case ScreenState::Options:
+        reportWebState("options");
+        break;
+    case ScreenState::LevelSelect:
+        reportWebState("level-select");
+        break;
+    case ScreenState::Playing:
+        reportWebState("playing");
+        break;
+    case ScreenState::GameOver:
+        reportWebState("game-over");
+        break;
+    }
+}
+
 struct GameOverState {
     Uint32 startedAt = 0;
     int level = 0;
@@ -933,6 +962,7 @@ int main() {
         }
 
         const Uint32 now = SDL_GetTicks();
+        reportWebState(screen);
 
         if (screen == ScreenState::Playing) {
             if (auto held = currentHeldDirection(heldDirections)) {

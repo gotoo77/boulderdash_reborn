@@ -1,0 +1,16 @@
+[settings]
+os=Emscripten
+arch=wasm
+compiler=emcc
+compiler.version=6.0.6
+compiler.cppstd=17
+compiler.libcxx=libc++
+build_type=Release
+
+[buildenv]
+CC=emcc
+CXX=em++
+AR=emar
+NM=emnm
+RANLIB=emranlib
+STRIP=emstrip

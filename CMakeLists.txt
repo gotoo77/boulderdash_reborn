@@ -11,6 +11,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(CTest)
 
+option(BOULDERDASH_STRICT_WARNINGS "Treat project compiler warnings as errors" OFF)
+
+function(boulderdash_enable_warnings target)
+    if (MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+        if (BOULDERDASH_STRICT_WARNINGS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        if (BOULDERDASH_STRICT_WARNINGS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    endif()
+endfunction()
+
 set(BOULDERDASH_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets")
 set(BOULDERDASH_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cfg")
 
@@ -87,6 +103,7 @@ add_executable(${BD_BIN}
 )
 
 target_include_directories(${BD_BIN} PRIVATE src)
+boulderdash_enable_warnings(${BD_BIN})
 
 # --------------------------------------------------
 # Configuration EMSCRIPTEN (WEB)
@@ -161,6 +178,7 @@ if (BUILD_TESTING)
         src/util/Logger.cpp
     )
     target_include_directories(boulderdash_tests PRIVATE src)
+    boulderdash_enable_warnings(boulderdash_tests)
     target_compile_definitions(boulderdash_tests PRIVATE
         TEST_ASSET_DIR="${BOULDERDASH_ASSET_DIR}"
     )
