@@ -120,6 +120,10 @@ bool SpriteSheet::loadIndex(const std::filesystem::path& path) {
         def.x = extractInt(content, "x", entryStart, entryEnd).value_or(0);
         def.y = extractInt(content, "y", entryStart, entryEnd).value_or(0);
         def.frames = std::max(1, extractInt(content, "frames", entryStart, entryEnd).value_or(1));
+        def.sourceX = extractInt(content, "sourceX", entryStart, entryEnd).value_or(-1);
+        def.sourceY = extractInt(content, "sourceY", entryStart, entryEnd).value_or(-1);
+        def.sourceWidth = extractInt(content, "sourceWidth", entryStart, entryEnd).value_or(-1);
+        def.sourceHeight = extractInt(content, "sourceHeight", entryStart, entryEnd).value_or(-1);
         Logger::debug(
             "Sprite '" + spriteName + "' starts at (" + std::to_string(def.x) + ", " + std::to_string(def.y) +
             ") frames=" + std::to_string(def.frames),
@@ -194,6 +198,28 @@ std::vector<SDL_Rect> SpriteSheet::extractFrames(
     int textureHeight) const {
     LOG_T(
         "SpriteSheet::extractFrames sprite=(%d,%d) frames=%d", def.x, def.y, def.frames);
+    const bool hasExplicitSource = def.sourceX >= 0 && def.sourceY >= 0 &&
+        def.sourceWidth > 0 && def.sourceHeight > 0;
+    if (hasExplicitSource) {
+        std::vector<SDL_Rect> frames;
+        frames.reserve(def.frames);
+        for (int i = 0; i < def.frames; ++i) {
+            const int frameX = def.sourceX + i * def.sourceWidth;
+            if (frameX + def.sourceWidth > textureWidth ||
+                def.sourceY + def.sourceHeight > textureHeight) {
+                Logger::warn("Explicit sprite frame exceeds texture bounds", __func__);
+                break;
+            }
+            frames.push_back(SDL_Rect{
+                frameX,
+                def.sourceY,
+                def.sourceWidth,
+                def.sourceHeight,
+            });
+        }
+        return frames;
+    }
+
     const int startX = def.x * m_tileSize;
     const int startY = def.y * m_tileSize;
     const int regionWidth = std::min(m_tileSize, textureWidth - startX);

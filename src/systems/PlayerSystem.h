@@ -22,6 +22,9 @@ struct PlayerEvents {
     bool rockPushed = false;
     bool rockFallStarted = false;
     bool rockFallLanded = false;
+    bool diamondFell = false;
+    bool diamondFallStarted = false;
+    bool enemyExploded = false;
     bool playerExplosion = false;
     int explosionX = 0;
     int explosionY = 0;

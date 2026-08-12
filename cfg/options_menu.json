@@ -1,5 +1,5 @@
 {
-  "title": { "y": 0.1, "scale": 3, "color": "#ff7043", "maxWidth": 0.8 },
-  "lines": { "startY": 0.3, "spacing": 0.07, "scale": 2, "color": "#00fff7", "maxWidth": 0.7 },
-  "hints": { "startY": 0.5, "spacing": 0.06, "scale": 1, "color": "#6fc3f7", "maxWidth": 0.7 }
+  "title": { "y": 0.08, "scale": 2, "color": "#ff7043", "maxWidth": 0.8 },
+  "lines": { "startY": 0.28, "spacing": 0.09, "scale": 1, "color": "#00fff7", "maxWidth": 0.88 },
+  "hints": { "startY": 0.7, "spacing": 0.06, "scale": 1, "color": "#6fc3f7", "maxWidth": 0.88 }
 }

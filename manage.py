@@ -28,6 +28,10 @@ WEB_ARTIFACTS = (
 LOCAL_EMSDK_DIR = PROJECT_DIR / ".tools" / "emsdk"
 EMSDK_VERSION = "6.0.6"
 EMSCRIPTEN_PROFILE = PROJECT_DIR / "profiles" / "emscripten"
+LEVELS_DIR = PROJECT_DIR / "assets" / "levels"
+LEVEL_WIDTH = 40
+LEVEL_HEIGHT = 22
+LEVEL_SYMBOLS = frozenset("#.bB*dDoOPEXx")
 
 
 class Style:
@@ -78,6 +82,55 @@ def strict_warnings_argument() -> str:
     return "-DBOULDERDASH_STRICT_WARNINGS=" + (
         "ON" if enabled in {"1", "on", "true", "yes"} else "OFF"
     )
+
+
+def validate_levels() -> None:
+    errors: list[str] = []
+    level_paths = sorted(LEVELS_DIR.glob("level*.txt"))
+    if not level_paths:
+        raise RuntimeError(f"Aucun niveau trouvé dans {LEVELS_DIR}")
+
+    for path in level_paths:
+        try:
+            rows = path.read_text(encoding="ascii").splitlines()
+        except UnicodeDecodeError as error:
+            errors.append(f"{path.name}: caractère non ASCII à l’octet {error.start + 1}")
+            continue
+
+        if len(rows) != LEVEL_HEIGHT:
+            errors.append(
+                f"{path.name}: {len(rows)} lignes au lieu de {LEVEL_HEIGHT}"
+            )
+        for row_number, row in enumerate(rows, 1):
+            if len(row) != LEVEL_WIDTH:
+                errors.append(
+                    f"{path.name}:{row_number}: {len(row)} colonnes au lieu de "
+                    f"{LEVEL_WIDTH}"
+                )
+            for column, symbol in enumerate(row, 1):
+                if symbol not in LEVEL_SYMBOLS:
+                    errors.append(
+                        f"{path.name}:{row_number}:{column}: symbole invalide {symbol!r}"
+                    )
+
+        player_count = sum(row.count("P") for row in rows)
+        exit_count = sum(row.count("E") for row in rows)
+        if player_count != 1:
+            errors.append(
+                f"{path.name}: {player_count} joueur(s) P, exactement 1 requis"
+            )
+        if exit_count != 1:
+            errors.append(
+                f"{path.name}: {exit_count} sortie(s) E, exactement 1 requise"
+            )
+
+    if errors:
+        details = "\n  - ".join(errors)
+        raise RuntimeError(f"Niveaux invalides :\n  - {details}")
+    print(Style.success(
+        f"Niveaux valides : {len(level_paths)} cartes de "
+        f"{LEVEL_WIDTH}x{LEVEL_HEIGHT}, avec 1 joueur et 1 sortie chacune."
+    ))
 
 
 def require_working_conan() -> None:
@@ -305,6 +358,7 @@ def web_configuration_is_current(env: dict[str, str]) -> bool:
 
 
 def build_web() -> None:
+    validate_levels()
     env = require_emscripten()
     if not web_configuration_is_current(env):
         print(Style.warning("Configuration Web absente ou obsolète : reconfiguration."))
@@ -340,9 +394,13 @@ def verify_web() -> None:
         raise RuntimeError("Artefacts Web manquants ou vides : " + ", ".join(missing))
 
     loader = (WEB_BUILD_DIR / "boulderdash.js").read_text(encoding="utf-8", errors="ignore")
-    missing_packages = [
-        path for path in ("assets/tiles.png", "cfg/config.json") if path not in loader
-    ]
+    packaged_paths = (
+        "assets/tiles.png",
+        "assets/sfx/game-over-arcade-6435.mp3",
+        "cfg/config.json",
+        "cfg/audio.json",
+    )
+    missing_packages = [path for path in packaged_paths if path not in loader]
     if missing_packages:
         raise RuntimeError(
             "Fichiers absents du package Emscripten : " + ", ".join(missing_packages)
@@ -394,6 +452,7 @@ def test() -> None:
 
 
 def run_game(arguments: Sequence[str] = ()) -> None:
+    validate_levels()
     build()
     run_command([GAME_BINARY, *arguments])
 
@@ -428,6 +487,7 @@ def smoke_test(duration: float = 3.0, *, ensure_build: bool = True) -> None:
 
 
 def verify() -> None:
+    validate_levels()
     test()
     smoke_test(ensure_build=False)
     print(Style.success("\nVérification complète réussie."))
@@ -492,18 +552,19 @@ def interactive_menu() -> int:
         "3": ("Nettoyer le build desktop", clean),
         "4": ("Reconstruire le build desktop", rebuild),
         "5": ("Lancer les tests", test),
-        "6": ("Vérification complète", verify),
-        "7": ("Configurer avec Conan", configure),
-        "8": ("Installer Emscripten SDK", install_web_sdk),
-        "9": ("Configurer le build Web", configure_web),
-        "10": ("Compiler le build Web", build_web),
-        "11": ("Nettoyer le build Web", clean_web),
-        "12": ("Reconstruire le build Web", rebuild_web),
-        "13": ("Vérifier le build Web", verify_web),
-        "14": ("Smoke test Web avec Chromium", smoke_web),
-        "15": ("Compiler et servir le build Web", serve_web),
-        "16": ("Afficher l'état Git", git_status),
-        "17": ("Afficher la roadmap", show_roadmap),
+        "6": ("Valider les niveaux", validate_levels),
+        "7": ("Vérification complète", verify),
+        "8": ("Configurer avec Conan", configure),
+        "9": ("Installer Emscripten SDK", install_web_sdk),
+        "10": ("Configurer le build Web", configure_web),
+        "11": ("Compiler le build Web", build_web),
+        "12": ("Nettoyer le build Web", clean_web),
+        "13": ("Reconstruire le build Web", rebuild_web),
+        "14": ("Vérifier le build Web", verify_web),
+        "15": ("Smoke test Web avec Chromium", smoke_web),
+        "16": ("Compiler et servir le build Web", serve_web),
+        "17": ("Afficher l'état Git", git_status),
+        "18": ("Afficher la roadmap", show_roadmap),
     }
     use_fzf = bool(shutil.which("fzf") and sys.stdin.isatty() and sys.stderr.isatty())
     while True:
@@ -537,6 +598,7 @@ def parse_args() -> argparse.Namespace:
     subparsers.add_parser("build", help="Compiler le projet")
     subparsers.add_parser("rebuild", help="Reconstruire entièrement le projet desktop")
     subparsers.add_parser("test", help="Compiler et exécuter les tests")
+    subparsers.add_parser("validate-levels", help="Valider le format de tous les niveaux")
     subparsers.add_parser("verify", help="Compiler, tester et effectuer un smoke test SDL")
     subparsers.add_parser("install-web-sdk", help="Installer Emscripten SDK localement")
     subparsers.add_parser("configure-web", help="Configurer CMake avec Emscripten")
@@ -569,6 +631,7 @@ def main() -> int:
         "build": build,
         "rebuild": rebuild,
         "test": test,
+        "validate-levels": validate_levels,
         "verify": verify,
         "install-web-sdk": install_web_sdk,
         "configure-web": configure_web,

@@ -158,8 +158,71 @@ void drawExitTile(SDL_Renderer* renderer, int tileSize) {
     SDL_RenderFillRect(renderer, &door);
 }
 
+void drawExitStateOverlay(SDL_Renderer* renderer, const SDL_Rect& destination, bool unlocked) {
+    SDL_BlendMode previousBlendMode = SDL_BLENDMODE_NONE;
+    SDL_GetRenderDrawBlendMode(renderer, &previousBlendMode);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    const int inset = std::max(2, destination.w / 8);
+    SDL_Rect frame{
+        destination.x + inset,
+        destination.y + inset,
+        destination.w - inset * 2,
+        destination.h - inset * 2,
+    };
+    SDL_Rect passage{
+        frame.x + std::max(2, frame.w / 4),
+        frame.y + std::max(2, frame.h / 5),
+        std::max(2, frame.w / 2),
+        std::max(2, frame.h * 4 / 5),
+    };
+
+    if (unlocked) {
+        setColor(renderer, color(0, 255, 140, 210));
+        for (int thickness = 0; thickness < 3; ++thickness) {
+            SDL_Rect outline{
+                frame.x + thickness,
+                frame.y + thickness,
+                frame.w - thickness * 2,
+                frame.h - thickness * 2,
+            };
+            SDL_RenderDrawRect(renderer, &outline);
+        }
+        setColor(renderer, color(0, 20, 10, 210));
+        SDL_RenderFillRect(renderer, &passage);
+    } else {
+        setColor(renderer, color(15, 5, 10, 185));
+        SDL_RenderFillRect(renderer, &frame);
+        setColor(renderer, color(180, 55, 35, 245));
+        SDL_RenderFillRect(renderer, &passage);
+        setColor(renderer, color(255, 175, 35, 255));
+        SDL_RenderDrawRect(renderer, &frame);
+        const int lockSize = std::max(3, destination.w / 6);
+        SDL_Rect lock{
+            destination.x + (destination.w - lockSize) / 2,
+            destination.y + destination.h / 2,
+            lockSize,
+            lockSize,
+        };
+        SDL_RenderFillRect(renderer, &lock);
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, previousBlendMode);
+}
+
 void drawEmptyTile(SDL_Renderer* renderer) {
     fill(renderer, color(0, 0, 0));
+}
+
+SDL_Rect fitPlayerSprite(const SDL_Rect& destination, int sourceWidth, int sourceHeight) {
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+        return destination;
+    }
+    SDL_Rect fitted = destination;
+    fitted.w = std::max(1, destination.h * sourceWidth / sourceHeight);
+    fitted.w = std::min(fitted.w, destination.w);
+    fitted.x += (destination.w - fitted.w) / 2;
+    return fitted;
 }
 
 } // namespace
@@ -310,19 +373,38 @@ void Renderer::drawWithSprites(const Grid& grid) const {
                         0;
                     SDL_Texture* tex = filesIt->second[frameIndex];
                     if (tex) {
+                        SDL_Rect spriteDestination = destination;
+                        if (cell.type == CellType::Player) {
+                            int sourceWidth = 0;
+                            int sourceHeight = 0;
+                            SDL_QueryTexture(tex, nullptr, nullptr, &sourceWidth, &sourceHeight);
+                            spriteDestination = fitPlayerSprite(
+                                destination, sourceWidth, sourceHeight);
+                        }
                         if (flip == SDL_FLIP_NONE) {
-                            SDL_RenderCopy(m_renderer, tex, nullptr, &destination);
+                            SDL_RenderCopy(m_renderer, tex, nullptr, &spriteDestination);
                         } else {
-                            SDL_RenderCopyEx(m_renderer, tex, nullptr, &destination, 0.0, nullptr, flip);
+                            SDL_RenderCopyEx(
+                                m_renderer, tex, nullptr, &spriteDestination, 0.0, nullptr, flip);
                         }
                         drawn = true;
                     }
                 }
             } else if (const SDL_Rect* frame = sheetFrameForId(spriteId, SDL_GetTicks())) {
+                const SDL_Rect spriteDestination = cell.type == CellType::Player ?
+                    fitPlayerSprite(destination, frame->w, frame->h) :
+                    destination;
                 if (flip == SDL_FLIP_NONE) {
-                    SDL_RenderCopy(m_renderer, m_spriteSheet->texture(), frame, &destination);
+                    SDL_RenderCopy(m_renderer, m_spriteSheet->texture(), frame, &spriteDestination);
                 } else {
-                    SDL_RenderCopyEx(m_renderer, m_spriteSheet->texture(), frame, &destination, 0.0, nullptr, flip);
+                    SDL_RenderCopyEx(
+                        m_renderer,
+                        m_spriteSheet->texture(),
+                        frame,
+                        &spriteDestination,
+                        0.0,
+                        nullptr,
+                        flip);
                 }
                 drawn = true;
             }
@@ -330,6 +412,9 @@ void Renderer::drawWithSprites(const Grid& grid) const {
             if (!drawn) {
                 SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 255);
                 SDL_RenderFillRect(m_renderer, &destination);
+            }
+            if (cell.type == CellType::Exit) {
+                drawExitStateOverlay(m_renderer, destination, cell.exitUnlocked);
             }
         }
     }
@@ -362,6 +447,9 @@ void Renderer::drawFallback(const Grid& grid) const {
             } else {
                 SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 255);
                 SDL_RenderFillRect(m_renderer, &rect);
+            }
+            if (cell.type == CellType::Exit) {
+                drawExitStateOverlay(m_renderer, rect, cell.exitUnlocked);
             }
         }
     }

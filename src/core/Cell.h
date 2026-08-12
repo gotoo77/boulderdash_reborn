@@ -8,4 +8,5 @@ struct Cell {
     bool willFallNext = false;
     bool enemyMovingRight = true;
     bool playerFacingRight = true;
+    bool exitUnlocked = false;
 };

@@ -13,7 +13,7 @@ et par le smoke test Chromium automatisé.
 | --- | --- | --- |
 | Gameplay principal | ✅ Fonctionnel | Déplacement, creusement, poussée, gravité, ennemis, score et vies |
 | Build desktop | ✅ Fiabilisé | Build CMake vierge réussi sur Fedora ARM64 avec les dépendances Conan existantes |
-| Tests automatisés | ✅ Actifs | 7 scénarios, exécutés par CTest |
+| Tests automatisés | ✅ Actifs | 20 scénarios, exécutés par CTest |
 | Données de niveaux | ✅ Contrôlées | Dimensions, bordures, joueur et sortie validés automatiquement |
 | Traductions | ✅ Contrôlées | Parité des clés EN/FR/JP validée automatiquement |
 | Exécution desktop | ✅ Vérifiée | Démarrage headless avec chargement des assets |
@@ -68,19 +68,29 @@ Objectif : tout changement doit être compilé et testé automatiquement.
 Critère de sortie : un clone vierge produit les builds desktop et Web documentés,
 et toutes les vérifications passent en CI.
 
-## P1 — sécuriser le cycle complet du jeu
+## P1 — sécuriser le cycle complet du jeu ✅ Terminé
 
 Objectif : couvrir les règles qui peuvent casser le score ou la progression.
 
-- [ ] Tester `Game` : chargement, timer, vies, respawn, score et changement de
+- [x] Tester `Game` : chargement, timer, vies, respawn, score et changement de
   niveau.
-- [ ] Tester les collisions rocher/joueur et rocher/ennemi ainsi que les
+- [x] Afficher distinctement les états verrouillé et ouvert de la sortie `E`.
+- [x] Corriger le cadrage du sprite joueur pour afficher le personnage en entier.
+- [x] Jouer un son dédié lorsque la collecte du dernier diamant déverrouille la sortie.
+- [x] Sonoriser la chute des diamants et leur explosion au contact d'un ennemi.
+- [x] Alerter pendant les 15 dernières secondes avec un bip et un timer clignotant.
+- [x] Refuser avant lancement et à l'exécution les niveaux sans exactement un joueur et une sortie.
+- [x] Centraliser les associations audio dans `cfg/audio.json` et sonoriser le Game Over.
+- [x] Tester les collisions rocher/joueur et rocher/ennemi ainsi que les
   explosions.
-- [ ] Ajouter un écran de victoire après le dernier niveau au lieu de fermer
+- [x] Ajouter un écran de victoire après le dernier niveau au lieu de fermer
   directement l’application.
-- [ ] Tester les fichiers de configuration valides, incomplets et corrompus.
+- [x] Tester les fichiers de configuration valides, incomplets et corrompus.
 - [x] Désactiver `devMode` dans la configuration destinée aux releases.
-- [ ] Ajouter un mode pause et définir le comportement du timer pendant la pause.
+- [x] Afficher correctement l’interface UTF-8, dont le japonais, sur desktop et Web.
+- [x] Séparer les volumes musique/effets et permettre leur réglage dans les Options.
+- [x] Ajouter un menu de pause avec reprise, Options et retour explicite au menu
+  principal, en gelant le timer et les systèmes pendant toute la navigation.
 
 Critère de sortie : le parcours des quatre niveaux, le game over et la victoire
 sont reproductibles par des tests de logique déterministes.
@@ -93,7 +103,7 @@ Objectif : rendre les changements d’interface et de gameplay plus simples.
   et boucle gameplay.
 - [ ] Retirer la dépendance audio de `Game` et produire des événements consommés
   par la couche SDL.
-- [ ] Remplacer le parseur JSON manuel de `Config` par `nlohmann_json` avec une
+- [x] Remplacer le parseur JSON manuel de `Config` par `nlohmann_json` avec une
   validation explicite et des messages d’erreur précis.
 - [ ] Séparer les exemples de menu du binaire de production.
 - [ ] Nettoyer les fichiers expérimentaux (`tmp_sim*.cpp`, `dev_backup.py`) après

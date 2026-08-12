@@ -13,7 +13,9 @@ de chaque famille d’assets ne sont pas documentées.
 | --- | --- | --- |
 | Sprites et tiles | `assets/sprites/`, `assets/tiles.png` | Provenance à documenter |
 | Logo | `assets/ui/` | Provenance à documenter |
-| Effets sonores | `assets/sfx/` | Provenance et licences à documenter |
+| Effets sonores existants | `assets/sfx/` hors `exit_unlock.wav`, `explosion.wav` et `time_warning.wav` | Provenance et licences à documenter |
+| Sons procéduraux | `assets/sfx/exit_unlock.wav`, `assets/sfx/explosion.wav`, `assets/sfx/time_warning.wav` | Créations originales du projet, licence MIT |
+| Son Game Over | `assets/sfx/game-over-arcade-6435.mp3` | Provenance et licence à documenter avant publication |
 | Musique | `assets/theme/` | Provenance et licence à documenter |
 | Police UI | `assets/fonts/ui_font.ttf` | Fichier Noto Sans JP détecté ; licence OFL à joindre |
 

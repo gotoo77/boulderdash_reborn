@@ -1,0 +1,30 @@
+{
+  "device": {
+    "frequency": 44100,
+    "outputChannels": 2,
+    "chunkSize": 2048,
+    "mixingChannels": 8
+  },
+  "volume": {
+    "music": 100,
+    "effects": 100
+  },
+  "sounds": {
+    "walk": { "file": "sfx/walk.wav", "volume": 128 },
+    "dig": { "file": "sfx/dig.wav", "volume": 128 },
+    "rock_fall": { "file": "sfx/rock_fall.wav", "volume": 128 },
+    "diamond_collect": { "file": "sfx/diamond.wav", "volume": 128 },
+    "death": { "file": "sfx/death.wav", "volume": 128 },
+    "exit_unlock": { "file": "sfx/exit_unlock.wav", "volume": 128 },
+    "diamond_fall": { "file": "sfx/diamond_fall.wav", "volume": 128 },
+    "explosion": { "file": "sfx/explosion.wav", "volume": 128 },
+    "time_warning": { "file": "sfx/time_warning.wav", "volume": 128 },
+    "game_over": { "file": "sfx/game-over-arcade-6435.mp3", "volume": 128 }
+  },
+  "music": {
+    "menu": {
+      "files": ["theme/bd_theme_menu.ogg", "theme/bd_theme_menu.wav"],
+      "volume": 96
+    }
+  }
+}

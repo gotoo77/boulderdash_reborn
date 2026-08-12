@@ -23,10 +23,14 @@ struct GameRules {
 
 class Game {
 public:
+    static constexpr int TimeWarningThresholdMs = 15000;
+
     Game(std::vector<std::filesystem::path> levelPaths, GameRules rules);
 
     void update(std::uint32_t deltaMs);
     void queueMove(Direction dir);
+    void setPaused(bool paused);
+    bool paused() const { return m_paused; }
 
     Grid& grid() { return m_grid; }
     const Grid& grid() const { return m_grid; }
@@ -75,4 +79,6 @@ private:
     bool m_respawnPending = false;
     int m_respawnElapsedMs = 0;
     bool m_rocksFalling = false;
+    int m_lastTimeWarningSecond = -1;
+    bool m_paused = false;
 };
