@@ -9,7 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import threading
 
-from playwright.sync_api import Error, TimeoutError, sync_playwright
+from playwright.sync_api import Error, Page, TimeoutError, sync_playwright
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
@@ -28,6 +28,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--options-screenshot", type=Path)
     parser.add_argument("--pause-screenshot", type=Path)
     return parser.parse_args()
+
+
+def wait_for(page: Page, expression: str, label: str, timeout: int = 10_000) -> None:
+    try:
+        page.wait_for_function(expression, timeout=timeout)
+    except TimeoutError as error:
+        state = page.evaluate("window.Module?.boulderdashState ?? 'unknown'")
+        raise RuntimeError(f"Timeout pendant {label}; état courant={state}") from error
+
+
+def wait_state(page: Page, state: str, label: str, timeout: int = 10_000) -> None:
+    wait_for(page, f"window.Module?.boulderdashState === '{state}'", label, timeout)
 
 
 def main() -> int:
@@ -53,11 +65,11 @@ def main() -> int:
             page = browser.new_page(viewport={"width": 1280, "height": 900})
             page.on("pageerror", lambda error: page_errors.append(str(error)))
             page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'menu'", timeout=30_000
-            )
-            page.wait_for_function(
-                "window.Module?.boulderdashFontBackend === 'ttf'", timeout=10_000
+            wait_state(page, "menu", "chargement du menu desktop", 30_000)
+            wait_for(
+                page,
+                "window.Module?.boulderdashFontBackend === 'ttf'",
+                "chargement de la police TTF",
             )
 
             canvas = page.locator("#canvas")
@@ -69,65 +81,53 @@ def main() -> int:
 
             page.keyboard.press("ArrowDown")
             page.keyboard.press("Enter")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'options'", timeout=10_000
-            )
+            wait_state(page, "options", "ouverture Options au clavier")
             page.keyboard.press("ArrowRight")
-            page.wait_for_function(
-                "window.Module?.boulderdashLanguage === 'jp'", timeout=10_000
+            wait_for(
+                page,
+                "window.Module?.boulderdashLanguage === 'jp'",
+                "changement de langue au clavier",
             )
             page.keyboard.press("ArrowDown")
             page.keyboard.press("Minus")
-            page.wait_for_function(
-                "window.Module?.boulderdashMusicVolume === 90", timeout=10_000
+            wait_for(
+                page,
+                "window.Module?.boulderdashMusicVolume === 90",
+                "réglage du volume musique",
             )
             page.keyboard.press("ArrowDown")
             page.keyboard.press("Minus")
-            page.wait_for_function(
-                "window.Module?.boulderdashEffectsVolume === 90", timeout=10_000
+            wait_for(
+                page,
+                "window.Module?.boulderdashEffectsVolume === 90",
+                "réglage du volume effets",
             )
             if args.options_screenshot:
                 args.options_screenshot.parent.mkdir(parents=True, exist_ok=True)
                 canvas.screenshot(path=args.options_screenshot)
             page.keyboard.press("Escape")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'menu'", timeout=10_000
-            )
+            wait_state(page, "menu", "retour au menu depuis Options")
             page.keyboard.press("Enter")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'playing'", timeout=10_000
-            )
+            wait_state(page, "playing", "démarrage de la partie au clavier")
             page.keyboard.press("Escape")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'paused'", timeout=10_000
-            )
+            wait_state(page, "paused", "pause au clavier")
             if args.pause_screenshot:
                 args.pause_screenshot.parent.mkdir(parents=True, exist_ok=True)
                 canvas.screenshot(path=args.pause_screenshot)
             page.keyboard.press("ArrowDown")
             page.keyboard.press("Enter")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'options'", timeout=10_000
-            )
+            wait_state(page, "options", "Options depuis le menu pause")
             page.keyboard.press("Escape")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'paused'", timeout=10_000
-            )
+            wait_state(page, "paused", "retour au menu pause")
             page.keyboard.press("Escape")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'playing'", timeout=10_000
-            )
+            wait_state(page, "playing", "reprise avec Échap")
             page.keyboard.press("p")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'paused'", timeout=10_000
-            )
+            wait_state(page, "paused", "pause avec P")
             page.wait_for_timeout(500)
             if page.evaluate("window.Module?.boulderdashState") != "paused":
                 raise RuntimeError("Le jeu a quitté la pause sans commande de reprise")
             page.keyboard.press("p")
-            page.wait_for_function(
-                "window.Module?.boulderdashState === 'playing'", timeout=10_000
-            )
+            wait_state(page, "playing", "reprise avec P")
             if args.screenshot:
                 args.screenshot.parent.mkdir(parents=True, exist_ok=True)
                 canvas.screenshot(path=args.screenshot)
@@ -140,8 +140,11 @@ def main() -> int:
             touch_page = touch_context.new_page()
             touch_page.on("pageerror", lambda error: page_errors.append(str(error)))
             touch_page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-            touch_page.wait_for_function(
-                "window.Module?.boulderdashState === 'menu'", timeout=30_000
+            wait_state(touch_page, "menu", "chargement du menu mobile", 30_000)
+            wait_for(
+                touch_page,
+                "typeof window.Module?._boulderdash_web_input === 'function'",
+                "disponibilité du pont tactile C++",
             )
 
             touch_controls = touch_page.locator("#touch-controls")
@@ -158,32 +161,22 @@ def main() -> int:
             back = touch_page.locator("[data-action='5']")
             start = touch_page.locator("[data-action='6']")
 
-            down.tap()
-            confirm.tap()
-            touch_page.wait_for_function(
-                "window.Module?.boulderdashState === 'options'", timeout=10_000
-            )
-            back.tap()
-            touch_page.wait_for_function(
-                "window.Module?.boulderdashState === 'menu'", timeout=10_000
-            )
-            up.tap()
-            confirm.tap()
-            touch_page.wait_for_function(
-                "window.Module?.boulderdashState === 'playing'", timeout=10_000
-            )
-            start.tap()
-            touch_page.wait_for_function(
-                "window.Module?.boulderdashState === 'paused'", timeout=10_000
-            )
-            start.tap()
-            touch_page.wait_for_function(
-                "window.Module?.boulderdashState === 'playing'", timeout=10_000
-            )
-            back.tap()
-            touch_page.wait_for_function(
-                "window.Module?.boulderdashState === 'paused'", timeout=10_000
-            )
+            # click() déclenche explicitement pointerdown/pointerup dans Chromium,
+            # c'est le contrat réellement consommé par le shell tactile.
+            down.click()
+            confirm.click()
+            wait_state(touch_page, "options", "ouverture Options au tactile")
+            back.click()
+            wait_state(touch_page, "menu", "retour au menu au tactile")
+            up.click()
+            confirm.click()
+            wait_state(touch_page, "playing", "démarrage de la partie au tactile")
+            start.click()
+            wait_state(touch_page, "paused", "pause avec START tactile")
+            start.click()
+            wait_state(touch_page, "playing", "reprise avec START tactile")
+            back.click()
+            wait_state(touch_page, "paused", "pause avec B tactile")
             touch_context.close()
 
             if page_errors:
