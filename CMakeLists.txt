@@ -108,13 +108,10 @@ if (EMSCRIPTEN)
     #)
 
     target_compile_options(${BD_BIN} PRIVATE
-    "-sUSE_SDL=2"
-    "-sUSE_SDL_MIXER=2"
-    "-sUSE_LIBPNG=1"
-    "-sASSERTIONS=2"
-    "-sSAFE_HEAP=1"
-    "-sSTACK_OVERFLOW_CHECK=2"
-)
+        "-sUSE_SDL=2"
+        "-sUSE_SDL_MIXER=2"
+        "-sUSE_LIBPNG=1"
+    )
 
     # ⚠️ FLAGS OBLIGATOIRES AU LINK
     target_link_options(${BD_BIN} PRIVATE
@@ -125,8 +122,12 @@ if (EMSCRIPTEN)
         "-sALLOW_MEMORY_GROWTH=1"
         "-sFORCE_FILESYSTEM=1"
         "-sINITIAL_MEMORY=256MB"
-        "--preload-file" "${BOULDERDASH_ASSET_DIR}@/assets"
-        "--preload-file" "${BOULDERDASH_CONFIG_DIR}@/cfg"
+        "-sASYNCIFY=1"
+        "-sASSERTIONS=2"
+        "-sSAFE_HEAP=1"
+        "-sSTACK_OVERFLOW_CHECK=2"
+        "SHELL:--preload-file ${BOULDERDASH_ASSET_DIR}@/assets"
+        "SHELL:--preload-file ${BOULDERDASH_CONFIG_DIR}@/cfg"
     )
 # --------------------------------------------------
 # Configuration DESKTOP

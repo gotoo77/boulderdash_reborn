@@ -8,6 +8,7 @@
 # Local tooling environments and caches
 /tools/venv/
 /.venv/
+/.tools/
 __pycache__/
 *.py[cod]
 

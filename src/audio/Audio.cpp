@@ -1,6 +1,9 @@
 #include "Audio.h"
 
 #include <SDL_mixer.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include <array>
 #include <filesystem>
@@ -10,6 +13,26 @@
 #include "../util/Logger.h"
 
 namespace {
+
+#ifdef __EMSCRIPTEN__
+EM_JS(void, resumeBrowserAudioContext, (), {
+    const sdl = Module['SDL2'];
+    if (!sdl || !sdl.audioContext) {
+        Module['boulderdashAudioState'] = 'unavailable';
+        return;
+    }
+    const context = sdl.audioContext;
+    Module['boulderdashAudioState'] = context.state;
+    if (context.state === 'suspended') {
+        context.resume().then(() => {
+            Module['boulderdashAudioState'] = context.state;
+        }).catch((error) => {
+            Module['boulderdashAudioState'] = 'error';
+            console.warn('Unable to resume Web Audio context:', error);
+        });
+    }
+});
+#endif
 
 using SoundEntry = std::pair<SoundId, const char*>;
 
@@ -99,6 +122,15 @@ bool Audio::init() {
 
     g_initialized = true;
     return true;
+}
+
+void Audio::resume() {
+#ifdef __EMSCRIPTEN__
+    resumeBrowserAudioContext();
+    if (g_initialized && g_menuMusicActive && g_menuMusic) {
+        Mix_ResumeMusic();
+    }
+#endif
 }
 
 void Audio::shutdown() {

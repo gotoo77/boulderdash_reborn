@@ -4,17 +4,28 @@
 from __future__ import annotations
 
 import argparse
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 from typing import Sequence
+import webbrowser
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
 BUILD_DIR = PROJECT_DIR / "build"
 GAME_BINARY = BUILD_DIR / "boulderdash"
+WEB_BUILD_DIR = PROJECT_DIR / "build-web"
+WEB_ARTIFACTS = (
+    "boulderdash.html",
+    "boulderdash.js",
+    "boulderdash.wasm",
+    "boulderdash.data",
+)
+LOCAL_EMSDK_DIR = PROJECT_DIR / ".tools" / "emsdk"
 
 
 class Style:
@@ -82,6 +93,74 @@ def require_working_conan() -> None:
         ) from error
 
 
+def emscripten_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    if shutil.which("emcmake", path=env.get("PATH")):
+        return env
+    environment_script = LOCAL_EMSDK_DIR / "emsdk_env.sh"
+    if not environment_script.is_file():
+        return env
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1" >/dev/null && env -0',
+            "bash",
+            str(environment_script),
+        ],
+        cwd=PROJECT_DIR,
+        check=True,
+        capture_output=True,
+    )
+    for entry in result.stdout.split(b"\0"):
+        if not entry or b"=" not in entry:
+            continue
+        key, value = entry.split(b"=", 1)
+        env[key.decode()] = value.decode()
+    return env
+
+
+def require_emscripten() -> dict[str, str]:
+    env = emscripten_environment()
+    missing = [
+        command
+        for command in ("emcmake", "emcc", "em++")
+        if not shutil.which(command, path=env.get("PATH"))
+    ]
+    if missing:
+        raise RuntimeError(
+            "Emscripten est absent (commandes manquantes : "
+            + ", ".join(missing)
+            + "). Lancez 'uv run manage.py install-web-sdk' ou utilisez "
+            "l'option d'installation du menu."
+        )
+    return env
+
+
+def install_web_sdk() -> None:
+    emsdk_executable = LOCAL_EMSDK_DIR / "emsdk"
+    if not emsdk_executable.exists():
+        LOCAL_EMSDK_DIR.parent.mkdir(parents=True, exist_ok=True)
+        run_command(
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "https://github.com/emscripten-core/emsdk.git",
+                LOCAL_EMSDK_DIR,
+            ]
+        )
+    elif not (LOCAL_EMSDK_DIR / ".git").is_dir():
+        raise RuntimeError(f"Le dossier {LOCAL_EMSDK_DIR} existe mais n'est pas un dépôt emsdk.")
+
+    run_command([emsdk_executable, "install", "latest"])
+    run_command([emsdk_executable, "activate", "latest"])
+    env = require_emscripten()
+    run_command(["emcc", "--version"], env=env)
+    print(Style.success("Emscripten SDK est installé et activé localement."))
+
+
 def configure() -> None:
     require_working_conan()
     env = compiler_environment()
@@ -120,6 +199,127 @@ def build() -> None:
         configure()
     run_command(["cmake", "--build", BUILD_DIR, "--parallel", os.cpu_count() or 2])
     print(Style.success("Compilation terminée."))
+
+
+def configure_web() -> None:
+    require_working_conan()
+    env = require_emscripten()
+    WEB_BUILD_DIR.mkdir(exist_ok=True)
+    run_command(
+        [
+            "conan",
+            "install",
+            ".",
+            f"--output-folder={WEB_BUILD_DIR}",
+            "--build=missing",
+            "-s",
+            "build_type=Release",
+            "-s",
+            "compiler.cppstd=17",
+        ],
+        env=env,
+    )
+    run_command(
+        [
+            "emcmake",
+            "cmake",
+            "-S",
+            ".",
+            "-B",
+            WEB_BUILD_DIR,
+            "--fresh",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DBUILD_TESTING=OFF",
+            f"-Dnlohmann_json_DIR={WEB_BUILD_DIR}",
+        ],
+        env=env,
+    )
+    print(Style.success("Configuration WebAssembly terminée."))
+
+
+def web_configuration_is_current(env: dict[str, str]) -> bool:
+    cache = WEB_BUILD_DIR / "CMakeCache.txt"
+    conan_config = WEB_BUILD_DIR / "nlohmann_json-config.cmake"
+    emsdk_dir = env.get("EMSDK")
+    if not cache.is_file() or not conan_config.is_file() or not emsdk_dir:
+        return False
+
+    expected_toolchain = (
+        Path(emsdk_dir) / "upstream" / "emscripten" / "cmake" / "Modules"
+        / "Platform" / "Emscripten.cmake"
+    )
+    cache_text = cache.read_text(encoding="utf-8", errors="ignore")
+    toolchain_is_current = (
+        f"CMAKE_TOOLCHAIN_FILE:FILEPATH={expected_toolchain}" in cache_text
+    )
+    dependency_is_configured = any(
+        f"nlohmann_json_DIR:{cache_type}={WEB_BUILD_DIR}" in cache_text
+        for cache_type in ("PATH", "UNINITIALIZED")
+    )
+    return toolchain_is_current and dependency_is_configured
+
+
+def build_web() -> None:
+    env = require_emscripten()
+    if not web_configuration_is_current(env):
+        print(Style.warning("Configuration Web absente ou obsolète : reconfiguration."))
+        configure_web()
+    run_command(
+        [
+            "cmake",
+            "--build",
+            WEB_BUILD_DIR,
+            "--target",
+            "boulderdash",
+            "--parallel",
+            os.cpu_count() or 2,
+        ],
+        env=env,
+    )
+    print(Style.success("Compilation WebAssembly terminée."))
+
+
+def verify_web() -> None:
+    build_web()
+    missing = [
+        name
+        for name in WEB_ARTIFACTS
+        if not (WEB_BUILD_DIR / name).is_file() or (WEB_BUILD_DIR / name).stat().st_size == 0
+    ]
+    if missing:
+        raise RuntimeError("Artefacts Web manquants ou vides : " + ", ".join(missing))
+
+    loader = (WEB_BUILD_DIR / "boulderdash.js").read_text(encoding="utf-8", errors="ignore")
+    missing_packages = [
+        path for path in ("assets/tiles.png", "cfg/config.json") if path not in loader
+    ]
+    if missing_packages:
+        raise RuntimeError(
+            "Fichiers absents du package Emscripten : " + ", ".join(missing_packages)
+        )
+    if "Asyncify" not in loader:
+        raise RuntimeError(
+            "Le runtime Web ne contient pas Asyncify : la boucle de jeu ne pourra "
+            "pas rendre la main au navigateur."
+        )
+    print(Style.success("Artefacts Web et données préchargées vérifiés."))
+
+
+def serve_web(port: int = 8000, *, open_browser: bool = True) -> None:
+    verify_web()
+    handler = partial(SimpleHTTPRequestHandler, directory=str(WEB_BUILD_DIR))
+    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    url = f"http://127.0.0.1:{port}/boulderdash.html"
+    print(Style.success(f"Serveur Web disponible sur {url}"))
+    print("Appuyez sur Ctrl+C pour l'arrêter.")
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nArrêt du serveur Web.")
+    finally:
+        server.server_close()
 
 
 def test() -> None:
@@ -186,8 +386,13 @@ def interactive_menu() -> int:
         "3": ("Lancer les tests", test),
         "4": ("Vérification complète", verify),
         "5": ("Configurer avec Conan", configure),
-        "6": ("Afficher l'état Git", git_status),
-        "7": ("Afficher la roadmap", show_roadmap),
+        "6": ("Installer Emscripten SDK", install_web_sdk),
+        "7": ("Configurer le build Web", configure_web),
+        "8": ("Compiler le build Web", build_web),
+        "9": ("Vérifier le build Web", verify_web),
+        "10": ("Compiler et servir le build Web", serve_web),
+        "11": ("Afficher l'état Git", git_status),
+        "12": ("Afficher la roadmap", show_roadmap),
     }
     while True:
         print(Style.title("\n╔══════════════════════════════════╗"))
@@ -216,10 +421,17 @@ def parse_args() -> argparse.Namespace:
     subparsers.add_parser("build", help="Compiler le projet")
     subparsers.add_parser("test", help="Compiler et exécuter les tests")
     subparsers.add_parser("verify", help="Compiler, tester et effectuer un smoke test SDL")
+    subparsers.add_parser("install-web-sdk", help="Installer Emscripten SDK localement")
+    subparsers.add_parser("configure-web", help="Configurer CMake avec Emscripten")
+    subparsers.add_parser("build-web", help="Compiler la version WebAssembly")
+    subparsers.add_parser("verify-web", help="Vérifier les artefacts et données Web")
     subparsers.add_parser("status", help="Afficher l'état Git et les remotes")
     subparsers.add_parser("roadmap", help="Afficher ROADMAP.md")
     run_parser = subparsers.add_parser("run", help="Compiler si nécessaire et lancer le jeu")
     run_parser.add_argument("game_args", nargs=argparse.REMAINDER)
+    serve_parser = subparsers.add_parser("serve-web", help="Compiler et servir la version Web")
+    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.add_argument("--no-browser", action="store_true")
     return parser.parse_args()
 
 
@@ -230,6 +442,10 @@ def main() -> int:
         "build": build,
         "test": test,
         "verify": verify,
+        "install-web-sdk": install_web_sdk,
+        "configure-web": configure_web,
+        "build-web": build_web,
+        "verify-web": verify_web,
         "status": git_status,
         "roadmap": show_roadmap,
     }
@@ -238,6 +454,8 @@ def main() -> int:
             return interactive_menu()
         if args.command == "run":
             run_game(args.game_args)
+        elif args.command == "serve-web":
+            serve_web(args.port, open_browser=not args.no_browser)
         else:
             actions[args.command]()
         return 0

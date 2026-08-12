@@ -37,6 +37,29 @@ Les mêmes actions sont disponibles sans interaction, par exemple
 `uv run manage.py test`, `uv run manage.py verify` ou
 `uv run manage.py status`.
 
+### Build WebAssembly
+
+Installer une copie locale d’[Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html),
+puis configurer et compiler :
+
+```bash
+uv run manage.py install-web-sdk
+uv run manage.py configure-web
+uv run manage.py build-web
+uv run manage.py verify-web
+```
+
+Pour compiler, vérifier, démarrer un serveur local et ouvrir le navigateur :
+
+```bash
+./web.sh
+```
+
+Le serveur utilise par défaut `http://127.0.0.1:8000/boulderdash.html`.
+Un autre port peut être choisi avec `./web.sh --port 8080`.
+Comme l’exigent les navigateurs, le contexte audio est activé au premier clic
+ou au premier appui sur une touche dans la page.
+
 ### Build avec Conan (nlohmann::json)
 
 Conan 2.31.2 est fourni par l’environnement UV du projet. Synchroniser les
