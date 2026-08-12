@@ -21,7 +21,7 @@ et par le smoke test Chromium automatisé.
 | Outils Python/Conan | ✅ Reproductibles | UV, Python 3.12, Conan 2.31.2 et Pillow sont verrouillés |
 | Gestion de versions | ✅ Active | `main` suit `origin/main` et l’état initial est publié |
 | Visibilité GitHub | ✅ Privée | `gotoo77/boulderdash_reborn` est privé pendant l’audit des assets |
-| CI | 🟡 Prête localement | Workflow desktop + Web/Chromium ajouté ; première exécution GitHub à confirmer |
+| CI | ✅ Validée | Workflow GitHub Actions desktop + Web/Chromium exécuté avec succès |
 
 ## Terminé — fiabilisation initiale
 
@@ -48,7 +48,7 @@ et par le smoke test Chromium automatisé.
   logiciel sur le Web et reprendre Web Audio après la première interaction.
 - [x] Ajouter la licence MIT au code et séparer explicitement le statut des assets.
 
-## P0 — rendre chaque livraison reproductible
+## P0 — rendre chaque livraison reproductible ✅ Terminé
 
 Objectif : tout changement doit être compilé et testé automatiquement.
 
