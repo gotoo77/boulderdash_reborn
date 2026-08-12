@@ -108,8 +108,12 @@ boulderdash_enable_sanitizers(boulderdash_core)
 add_executable(${BD_BIN}
     src/main.cpp
     src/app/Application.cpp
+    src/app/AssetCatalog.cpp
     src/app/AudioEventRouter.cpp
     src/app/GameplayLoop.cpp
+    src/app/InputMapping.cpp
+    src/app/MenuFactory.cpp
+    src/app/OptionsStyle.cpp
     src/app/ScreenState.cpp
     src/audio/Audio.cpp
     src/render/Renderer.cpp
@@ -156,13 +160,6 @@ if (EMSCRIPTEN)
     # Les assets sont montés dans /assets (FS virtuel)
     target_compile_definitions(${BD_BIN} PRIVATE ASSETS_DIR="/assets" CONFIG_DIR="/cfg")
 
-    # ⚠️ FLAGS OBLIGATOIRES À LA COMPILATION
-    #target_compile_options(boulderdash PRIVATE
-    #    "-sUSE_SDL=2"
-    #    "-sUSE_SDL_MIXER=2"
-    #    "-sUSE_LIBPNG=1"
-    #)
-
     target_compile_options(${BD_BIN} PRIVATE
         "-sUSE_SDL=2"
         "-sUSE_SDL_MIXER=2"
@@ -170,7 +167,6 @@ if (EMSCRIPTEN)
         "-sUSE_LIBPNG=1"
     )
 
-    # ⚠️ FLAGS OBLIGATOIRES AU LINK
     target_link_options(${BD_BIN} PRIVATE
         "-sUSE_SDL=2"
         "-sUSE_SDL_MIXER=2"
