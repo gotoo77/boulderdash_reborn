@@ -109,6 +109,8 @@ Objectif : rendre les changements d’interface et de gameplay plus simples.
 - [x] Nettoyer les fichiers expérimentaux (`tmp_sim*.cpp`, `dev_backup.py`) après
   récupération éventuelle de leur contenu utile.
 - [x] Ajouter des tests sous AddressSanitizer et UndefinedBehaviorSanitizer.
+- [x] Décomposer les responsabilités auxiliaires de `Application.cpp` et séparer
+  les 21 scénarios de test en suites Game/System/Data.
 
 Critère de sortie : le cœur du jeu se compile et se teste sans SDL ni audio, et
 le point d’entrée ne porte plus la logique des différents écrans.
@@ -117,6 +119,10 @@ le point d’entrée ne porte plus la logique des différents écrans.
 
 - [x] Ajouter une licence MIT au code.
 - [ ] Documenter les licences et crédits de tous les assets avant passage en public.
+- [x] Remplacer les cinq captures audio CPC identifiées par des SFX procéduraux
+  originaux, reproductibles et générés pendant le build.
+- [x] Remplacer le son de mort tiers insuffisamment sourcé par un SFX procédural
+  original généré par le même synthétiseur.
 - [ ] Produire une archive desktop versionnée et une publication Web versionnée.
 - [ ] Ajouter les commandes de lancement et les contrôles clavier complets au
   README.

@@ -10,11 +10,11 @@
     "effects": 100
   },
   "sounds": {
-    "walk": { "file": "sfx/walk.wav", "volume": 128 },
-    "dig": { "file": "sfx/dig.wav", "volume": 128 },
+    "walk": { "file": "sfx/walk.wav", "volume": 20 },
+    "dig": { "file": "sfx/dig.wav", "volume": 24 },
     "rock_fall": { "file": "sfx/rock_fall.wav", "volume": 128 },
     "diamond_collect": { "file": "sfx/diamond.wav", "volume": 128 },
-    "death": { "file": "sfx/death.wav", "volume": 128 },
+    "death": { "file": "sfx/death.wav", "volume": 112 },
     "exit_unlock": { "file": "sfx/exit_unlock.wav", "volume": 128 },
     "diamond_fall": { "file": "sfx/diamond_fall.wav", "volume": 128 },
     "explosion": { "file": "sfx/explosion.wav", "volume": 128 },
