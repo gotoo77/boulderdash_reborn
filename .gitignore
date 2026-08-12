@@ -2,6 +2,7 @@
 /build/
 /build-*/
 /cmake-build-*/
+/dist-web/
 /compile_commands.json
 /CMakeUserPresets.json
 
