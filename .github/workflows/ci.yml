@@ -95,6 +95,9 @@ jobs:
           --browser chromium
           --screenshot web-smoke.png
 
+      - name: Package static Web distribution
+        run: uv run python tools/package_web.py
+
       - name: Upload browser smoke-test screenshot
         if: ${{ always() }}
         uses: actions/upload-artifact@v5

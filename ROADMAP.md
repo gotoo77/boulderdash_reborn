@@ -118,12 +118,16 @@ le point d’entrée ne porte plus la logique des différents écrans.
 ## P3 — préparer une version distribuable
 
 - [x] Ajouter une licence MIT au code.
-- [ ] Documenter les licences et crédits de tous les assets avant passage en public.
+- [x] Documenter la provenance et les licences connues des assets, ainsi que
+  l'exception explicitement acceptée pour la musique du menu.
 - [x] Remplacer les cinq captures audio CPC identifiées par des SFX procéduraux
   originaux, reproductibles et générés pendant le build.
 - [x] Remplacer le son de mort tiers insuffisamment sourcé par un SFX procédural
   original généré par le même synthétiseur.
-- [ ] Produire une archive desktop versionnée et une publication Web versionnée.
+- [x] Préparer un package Web statique reproductible `dist-web/` avec `index.html`.
+- [x] Ajouter un workflow GitHub Actions dédié au déploiement GitHub Pages.
+- [ ] Activer GitHub Pages avec la source GitHub Actions, déployer et valider l'URL publique.
+- [ ] Produire une archive desktop versionnée.
 - [ ] Ajouter les commandes de lancement et les contrôles clavier complets au
   README.
 - [ ] Tester au minimum Linux x86_64/ARM64 et les navigateurs Firefox/Chromium.
