@@ -11,9 +11,8 @@
 #include <execinfo.h>
 #include <unistd.h>
 #endif
-#include <filesystem>
-#include <fstream>
 #include <csignal>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -22,15 +21,17 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <nlohmann/json.hpp>
 
 #include "app/Application.h"
-#include "audio/Audio.h"
+#include "app/AssetCatalog.h"
 #include "app/AudioEventRouter.h"
 #include "app/GameplayLoop.h"
+#include "app/InputMapping.h"
+#include "app/MenuFactory.h"
+#include "app/OptionsStyle.h"
 #include "app/ScreenState.h"
+#include "audio/Audio.h"
 #include "core/Game.h"
-#include "menu/MenuLoader.h"
 #include "menu/MenuManager.h"
 #include "menu/MenuTypes.h"
 #include "menu/sdl/SDLInputProvider.h"
@@ -50,53 +51,8 @@
 namespace {
 
 constexpr int kHudHeight = 72;
-constexpr const char* kDevLevelActionPrefix = "dev_select_level_";
-constexpr SDL_Keycode kDefaultFullscreenKey = SDLK_f;
-
-struct LanguageEntry {
-    std::string code;
-    std::string label;
-};
-
-struct TextStyle {
-    SDL_Color color{ 255, 255, 255, 255 };
-    int scale = 2;
-    float maxWidth = 0.9f;
-    float y = 0.0f;
-};
-
-struct OptionsScreenStyle {
-    TextStyle title{ SDL_Color{ 255, 112, 67, 255 }, 2, 0.8f, 0.08f };
-    TextStyle lines{ SDL_Color{ 0, 255, 247, 255 }, 1, 0.88f, 0.28f };
-    TextStyle hints{ SDL_Color{ 111, 195, 247, 255 }, 1, 0.88f, 0.70f };
-    float lineSpacing = 0.09f;
-    float hintSpacing = 0.06f;
-};
-
 constexpr int kOptionCount = 3;
 constexpr int kVolumeStep = 10;
-
-bool isVolumeIncreaseKey(SDL_Keycode key) {
-    return key == SDLK_PLUS || key == SDLK_KP_PLUS || key == SDLK_EQUALS;
-}
-
-bool isVolumeDecreaseKey(SDL_Keycode key) {
-    return key == SDLK_MINUS || key == SDLK_KP_MINUS;
-}
-
-class TranslatorTextProvider : public menu::ITextProvider {
-public:
-    explicit TranslatorTextProvider(const Translator& translator)
-        : m_translator(translator) {
-    }
-
-    std::string getText(const std::string& id) const override {
-        return m_translator.tr(id);
-    }
-
-private:
-    const Translator& m_translator;
-};
 
 void installCrashHandler() {
 #ifndef __EMSCRIPTEN__
@@ -120,220 +76,6 @@ void delayFrame(Uint32 milliseconds) {
 #endif
 }
 
-std::optional<Direction> directionFromKey(SDL_Keycode key) {
-    switch (key) {
-    case SDLK_UP:
-        return Direction::Up;
-    case SDLK_DOWN:
-        return Direction::Down;
-    case SDLK_LEFT:
-        return Direction::Left;
-    case SDLK_RIGHT:
-        return Direction::Right;
-    default:
-        return std::nullopt;
-    }
-}
-
-SDL_Keycode parseKeyFromName(const std::string& name, SDL_Keycode fallback, const char* context) {
-    if (name.empty()) {
-        return fallback;
-    }
-    SDL_Keycode parsed = SDL_GetKeyFromName(name.c_str());
-    if (parsed == SDLK_UNKNOWN) {
-        Logger::warn("Invalid key name '" + name + "', falling back to default.", context);
-        return fallback;
-    }
-    return parsed;
-}
-
-std::filesystem::path assetsBasePath() {
-#ifdef ASSETS_DIR
-    return std::filesystem::path(ASSETS_DIR);
-#else
-    return std::filesystem::path("assets");
-#endif
-}
-
-std::filesystem::path configBasePath() {
-    return assetsBasePath().parent_path() / "cfg";
-}
-
-std::filesystem::path resolveConfigPath() {
-    return configBasePath() / "config.json";
-}
-
-std::vector<std::filesystem::path> discoverLevels() {
-    std::vector<std::filesystem::path> levels;
-    const auto levelDir = assetsBasePath() / "levels";
-    try {
-        if (std::filesystem::exists(levelDir)) {
-            for (const auto& entry : std::filesystem::directory_iterator(levelDir)) {
-                if (entry.is_regular_file() && entry.path().extension() == ".txt") {
-                    levels.push_back(entry.path());
-                }
-            }
-        }
-    } catch (const std::exception& e) {
-        Logger::warn(std::string("Failed to list levels: ") + e.what(), __func__);
-    }
-    std::sort(levels.begin(), levels.end());
-    if (levels.empty()) {
-        levels.push_back(levelDir / "level01.txt");
-    }
-    return levels;
-}
-
-std::optional<std::string> extractJsonString(const std::string& text, const std::string& key) {
-    const std::string needle = '"' + key + '"';
-    auto keyPos = text.find(needle);
-    if (keyPos == std::string::npos) {
-        return std::nullopt;
-    }
-    keyPos += needle.size();
-    const auto colonPos = text.find(':', keyPos);
-    if (colonPos == std::string::npos) {
-        return std::nullopt;
-    }
-    const auto quoteStart = text.find('"', colonPos + 1);
-    if (quoteStart == std::string::npos) {
-        return std::nullopt;
-    }
-    const auto quoteEnd = text.find('"', quoteStart + 1);
-    if (quoteEnd == std::string::npos) {
-        return std::nullopt;
-    }
-    return text.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
-}
-
-std::string readLanguageLabel(const std::filesystem::path& file, const std::string& fallback) {
-    std::ifstream input(file);
-    if (!input) {
-        return fallback;
-    }
-    std::ostringstream oss;
-    oss << input.rdbuf();
-    const auto content = oss.str();
-    if (auto value = extractJsonString(content, "language.name")) {
-        return *value;
-    }
-    return fallback;
-}
-
-std::vector<LanguageEntry> discoverLanguages(const std::filesystem::path& i18nDir) {
-    std::vector<LanguageEntry> languages;
-    auto addLanguage = [&](const std::string& code) {
-        if (code.empty()) {
-            return;
-        }
-        const auto exists = std::find_if(
-            languages.begin(),
-            languages.end(),
-            [&](const LanguageEntry& entry) { return entry.code == code; });
-        if (exists != languages.end()) {
-            return;
-        }
-        const auto label = readLanguageLabel(i18nDir / (code + ".json"), code);
-        languages.push_back(LanguageEntry{ code, label });
-    };
-    addLanguage("en");
-    try {
-        if (std::filesystem::exists(i18nDir)) {
-            for (const auto& entry : std::filesystem::directory_iterator(i18nDir)) {
-                if (!entry.is_regular_file()) {
-                    continue;
-                }
-                if (entry.path().extension() == ".json") {
-                    addLanguage(entry.path().stem().string());
-                }
-            }
-        }
-    } catch (const std::exception& e) {
-        Logger::warn(std::string("Failed to list languages: ") + e.what(), __func__);
-    }
-    std::sort(languages.begin(), languages.end(), [](const LanguageEntry& a, const LanguageEntry& b) {
-        return a.label < b.label;
-    });
-    return languages;
-}
-
-SDL_Color parseColor(const nlohmann::json& value, SDL_Color fallback) {
-    auto clamp = [](int v) {
-        return static_cast<uint8_t>(std::max(0, std::min(255, v)));
-    };
-    if (value.is_string()) {
-        std::string hex = value.get<std::string>();
-        if (!hex.empty() && hex[0] == '#') {
-            hex.erase(0, 1);
-        }
-        if (hex.size() == 6 || hex.size() == 8) {
-            try {
-                const int r = std::stoi(hex.substr(0, 2), nullptr, 16);
-                const int g = std::stoi(hex.substr(2, 2), nullptr, 16);
-                const int b = std::stoi(hex.substr(4, 2), nullptr, 16);
-                const int a = (hex.size() == 8) ? std::stoi(hex.substr(6, 2), nullptr, 16) : 255;
-                return SDL_Color{ clamp(r), clamp(g), clamp(b), clamp(a) };
-            } catch (...) {
-                return fallback;
-            }
-        }
-    } else if (value.is_array() && value.size() >= 3) {
-        const int r = static_cast<int>(value[0].get<double>());
-        const int g = static_cast<int>(value[1].get<double>());
-        const int b = static_cast<int>(value[2].get<double>());
-        const int a = value.size() > 3 ? static_cast<int>(value[3].get<double>()) : 255;
-        return SDL_Color{ clamp(r), clamp(g), clamp(b), clamp(a) };
-    } else if (value.is_object()) {
-        const int r = clamp(value.value("r", static_cast<int>(fallback.r)));
-        const int g = clamp(value.value("g", static_cast<int>(fallback.g)));
-        const int b = clamp(value.value("b", static_cast<int>(fallback.b)));
-        const int a = clamp(value.value("a", static_cast<int>(fallback.a)));
-        return SDL_Color{ clamp(r), clamp(g), clamp(b), clamp(a) };
-    }
-    return fallback;
-}
-
-OptionsScreenStyle loadOptionsStyle(const std::filesystem::path& path) {
-    OptionsScreenStyle style;
-    if (!std::filesystem::exists(path)) {
-        return style;
-    }
-    try {
-        std::ifstream input(path);
-        nlohmann::json root;
-        input >> root;
-        if (auto title = root.find("title"); title != root.end() && title->is_object()) {
-            style.title.y = title->value("y", style.title.y);
-            style.title.scale = title->value("scale", style.title.scale);
-            style.title.maxWidth = title->value("maxWidth", style.title.maxWidth);
-            if (auto color = title->find("color"); color != title->end()) {
-                style.title.color = parseColor(*color, style.title.color);
-            }
-        }
-        if (auto lines = root.find("lines"); lines != root.end() && lines->is_object()) {
-            style.lines.y = lines->value("startY", style.lines.y);
-            style.lineSpacing = lines->value("spacing", style.lineSpacing);
-            style.lines.scale = lines->value("scale", style.lines.scale);
-            style.lines.maxWidth = lines->value("maxWidth", style.lines.maxWidth);
-            if (auto color = lines->find("color"); color != lines->end()) {
-                style.lines.color = parseColor(*color, style.lines.color);
-            }
-        }
-        if (auto hints = root.find("hints"); hints != root.end() && hints->is_object()) {
-            style.hints.y = hints->value("startY", style.hints.y);
-            style.hintSpacing = hints->value("spacing", style.hintSpacing);
-            style.hints.scale = hints->value("scale", style.hints.scale);
-            style.hints.maxWidth = hints->value("maxWidth", style.hints.maxWidth);
-            if (auto color = hints->find("color"); color != hints->end()) {
-                style.hints.color = parseColor(*color, style.hints.color);
-            }
-        }
-    } catch (const std::exception& e) {
-        Logger::warn(std::string("Failed to load options menu style: ") + e.what(), __func__);
-    }
-    return style;
-}
-
 std::string formatTitleTime(int ms) {
     if (ms < 0) {
         ms = 0;
@@ -344,26 +86,6 @@ std::string formatTitleTime(int ms) {
     char buffer[16];
     std::snprintf(buffer, sizeof(buffer), "%02d:%02d", minutes, seconds);
     return buffer;
-}
-
-std::filesystem::path resolveMenuTexturePath(
-    const std::filesystem::path& assetsRoot,
-    const std::string& textureId) {
-    if (textureId.empty()) {
-        return {};
-    }
-    std::filesystem::path candidate(textureId);
-    if (candidate.is_absolute() && std::filesystem::exists(candidate)) {
-        return candidate;
-    }
-    if (std::filesystem::exists(candidate)) {
-        return candidate;
-    }
-    const std::filesystem::path alt = assetsRoot / candidate;
-    if (std::filesystem::exists(alt)) {
-        return alt;
-    }
-    return candidate;
 }
 
 SDL_Texture* loadTextureFromPng(SDL_Renderer* renderer, const std::filesystem::path& path) {
@@ -394,105 +116,6 @@ SDL_Texture* loadTextureFromPng(SDL_Renderer* renderer, const std::filesystem::p
     }
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     return texture;
-}
-
-menu::Menu addDevMenuEntry(menu::Menu menu, const Translator& translator, bool devMode) {
-    if (!devMode) {
-        return menu;
-    }
-    menu::MenuDefinition definition = menu.definition();
-    const auto existing = std::find_if(
-        definition.items.begin(),
-        definition.items.end(),
-        [](const menu::MenuItem& item) { return item.action == "open_dev_level_select"; });
-    if (existing == definition.items.end()) {
-        definition.items.push_back(
-            menu::MenuItem{ translator.tr("menu.devMode"), std::string{}, "open_dev_level_select", true });
-    } else {
-        existing->label = translator.tr("menu.devMode");
-        existing->enabled = true;
-    }
-    return menu::Menu(std::move(definition));
-}
-
-menu::Menu buildFallbackMenu(const Translator& translator, bool devMode) {
-    menu::MenuDefinition def;
-    def.id = "fallback_main_menu";
-    def.layout.anchor = menu::AnchorPoint::TopCenter;
-    def.layout.spacing = 26.0f;
-    def.layout.offsetY = 200.0f;
-    def.itemScale = 2;
-    def.header = menu::HeaderDefinition{};
-    def.items.push_back(menu::MenuItem{ translator.tr("menu.newGame"), std::string{}, "start_game", true });
-    def.items.push_back(menu::MenuItem{ translator.tr("menu.options"), std::string{}, "open_options", true });
-    def.items.push_back(menu::MenuItem{ translator.tr("menu.exit"), std::string{}, "quit_game", true });
-    return addDevMenuEntry(menu::Menu(def), translator, devMode);
-}
-
-menu::Menu buildFallbackPauseMenu() {
-    menu::MenuDefinition definition;
-    definition.id = "fallback_pause_menu";
-    definition.layout.anchor = menu::AnchorPoint::Center;
-    definition.layout.spacing = 52.0f;
-    definition.layout.offsetY = 20.0f;
-    definition.itemScale = 1;
-    definition.colors.normal = menu::Color{ 220, 235, 255, 255 };
-    definition.colors.selected = menu::Color{ 255, 209, 128, 255 };
-    definition.items.push_back(menu::MenuItem{ {}, "pause.resume", "resume_game", true });
-    definition.items.push_back(menu::MenuItem{ {}, "pause.options", "open_options", true });
-    definition.items.push_back(menu::MenuItem{ {}, "pause.mainMenu", "return_main_menu", true });
-    return menu::Menu(std::move(definition));
-}
-
-menu::Menu loadPauseMenuDefinition(const std::filesystem::path& menuPath) {
-    try {
-        return menu::MenuLoader::loadFromFile(menuPath);
-    } catch (const std::exception& error) {
-        Logger::warn(std::string("Failed to load pause menu '") + menuPath.string() + "': " + error.what(), __func__);
-        return buildFallbackPauseMenu();
-    }
-}
-
-menu::Menu loadMainMenuDefinition(
-    const std::filesystem::path& menuPath,
-    const Translator& translator,
-    bool devMode) {
-    try {
-        menu::Menu menu = menu::MenuLoader::loadFromFile(menuPath);
-        return addDevMenuEntry(std::move(menu), translator, devMode);
-    } catch (const std::exception& e) {
-        Logger::warn(std::string("Failed to load menu '") + menuPath.string() + "': " + e.what(), __func__);
-        return buildFallbackMenu(translator, devMode);
-    }
-}
-
-menu::Menu buildLevelSelectMenu(
-    const Translator& translator,
-    const std::vector<std::filesystem::path>& levelPaths) {
-    menu::MenuDefinition def;
-    def.id = "dev_level_select";
-    def.layout.anchor = menu::AnchorPoint::Center;
-    def.layout.spacing = 28.0f;
-    def.layout.offsetY = 32.0f;
-    if (levelPaths.empty()) {
-        def.items.push_back(menu::MenuItem{ translator.tr("dev.noLevels"), std::string{}, "dev_no_levels", false });
-    } else {
-        for (std::size_t i = 0; i < levelPaths.size(); ++i) {
-            std::string displayName = levelPaths[i].filename().string();
-            if (displayName.empty()) {
-                displayName = levelPaths[i].string();
-            }
-            const std::string label =
-                translator.tr("dev.levelPrefix") + " " + std::to_string(i + 1) + " - " + displayName;
-            def.items.push_back(
-                menu::MenuItem{
-                    label,
-                    std::string{},
-                    std::string(kDevLevelActionPrefix) + std::to_string(i),
-                    true });
-        }
-    }
-    return menu::Menu(def);
 }
 
 } // namespace
@@ -591,7 +214,7 @@ int runApplication() {
     Renderer gridRenderer(renderer, config.tileSize, kHudHeight, assetsPath);
     HudRenderer hud(renderer, kHudHeight);
     const SDL_Keycode fullscreenToggleKey =
-        parseKeyFromName(config.fullscreenToggleKey, kDefaultFullscreenKey, __func__);
+        parseKeyFromName(config.fullscreenToggleKey, DefaultFullscreenKey, __func__);
     const std::string fullscreenKeyName = SDL_GetKeyName(fullscreenToggleKey);
     const std::filesystem::path uiFontPath = "assets/fonts/ui_font.ttf";
 
@@ -601,14 +224,14 @@ int runApplication() {
         assetsPath / "ui" / "ui_font.ttf",
         assetsPath / "fonts" / "ui_font.ttf"
     };
-    for (const auto& uiFontPath : bundledPaths) {
-        if (!ttfInitialized || !std::filesystem::exists(uiFontPath)) {
+    for (const auto& bundledFontPath : bundledPaths) {
+        if (!ttfInitialized || !std::filesystem::exists(bundledFontPath)) {
             continue;
         }
-        auto ttfFont = std::make_unique<TtfFont>(renderer, uiFontPath.string(), 32);
+        auto ttfFont = std::make_unique<TtfFont>(renderer, bundledFontPath.string(), 32);
         if (ttfFont->valid()) {
             uiFont = std::move(ttfFont);
-            Logger::info("Loaded UI font: " + uiFontPath.string(), __func__);
+            Logger::info("Loaded UI font: " + bundledFontPath.string(), __func__);
             break;
         }
     }
@@ -857,7 +480,6 @@ int runApplication() {
         if (baseWidth <= 0 || maxWidth <= 0) {
             return desiredScale;
         }
-        // Keep the text inside the viewport by capping the scale relative to the available width.
         const int maxScale = std::max(1, maxWidth / baseWidth);
         return std::max(1, std::min(desiredScale, maxScale));
     };
@@ -1212,7 +834,7 @@ int runApplication() {
         } else if (screen == ScreenState::LevelSelect) {
             levelSelectMenuManager.update(levelSelectInput);
             if (auto action = levelSelectMenuManager.consumeAction()) {
-                const std::string prefix(kDevLevelActionPrefix);
+                const std::string prefix(DevLevelActionPrefix);
                 if (action->rfind(prefix, 0) == 0) {
                     const std::string indexStr = action->substr(prefix.size());
                     try {
