@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "../audio/Audio.h"
 #include "../systems/EnemySystem.h"
 #include "../systems/GravitySystem.h"
 #include "../systems/PlayerSystem.h"
@@ -212,7 +211,7 @@ void Game::update(std::uint32_t deltaMs) {
         if (remainingMs > 0 && remainingMs <= TimeWarningThresholdMs) {
             const int warningSecond = (remainingMs + 999) / 1000;
             if (warningSecond != m_lastTimeWarningSecond) {
-                Audio::play(SoundId::TimeWarning);
+                m_events.push_back(GameEvent::TimeWarning);
                 m_lastTimeWarningSecond = warningSecond;
             }
         }
@@ -257,7 +256,7 @@ void Game::update(std::uint32_t deltaMs) {
         if (events.playerExplosion) {
             explodeAround(events.explosionX, events.explosionY);
         }
-        Audio::play(SoundId::Death);
+        m_events.push_back(GameEvent::PlayerDied);
         std::string reason = "Player died";
         if (events.deathCause == PlayerDeathCause::Enemy) {
             reason += " to an enemy";
@@ -281,13 +280,13 @@ void Game::update(std::uint32_t deltaMs) {
         return;
     }
     if (events.rockPushed) {
-        Audio::play(SoundId::RockFall);
+        m_events.push_back(GameEvent::RockMoved);
     } else if (events.diamondsCollected > 0) {
-        Audio::play(SoundId::Diamond);
+        m_events.push_back(GameEvent::DiamondCollected);
     } else if (events.dug) {
-        Audio::play(SoundId::Dig);
+        m_events.push_back(GameEvent::DirtDug);
     } else if (events.walked) {
-        Audio::play(SoundId::Walk);
+        m_events.push_back(GameEvent::PlayerWalked);
     }
     if (events.diamondsCollected > 0) {
         m_collectedDiamonds += events.diamondsCollected;
@@ -296,7 +295,7 @@ void Game::update(std::uint32_t deltaMs) {
         }
         updateExitState(m_grid, exitUnlocked());
         if (!exitWasUnlocked && exitUnlocked()) {
-            Audio::play(SoundId::ExitUnlock);
+            m_events.push_back(GameEvent::ExitUnlocked);
         }
         m_levelScore += events.diamondsCollected * m_rules.diamondValue;
         Logger::info("Diamonds collected: " + std::to_string(m_collectedDiamonds) + "/" +
@@ -350,16 +349,16 @@ void Game::update(std::uint32_t deltaMs) {
     if (gravityApplied) {
         const bool rocksFallingNow = anyRockFalling();
         if (events.rockFallStarted && !rocksWereFalling) {
-            Audio::play(SoundId::RockFall);
+            m_events.push_back(GameEvent::RockMoved);
         }
         if (rocksWereFalling && !rocksFallingNow && events.rockFallLanded) {
-            Audio::play(SoundId::RockFall);
+            m_events.push_back(GameEvent::RockMoved);
         }
         if (events.diamondFallStarted) {
-            Audio::play(SoundId::DiamondFall);
+            m_events.push_back(GameEvent::DiamondFallStarted);
         }
         if (events.enemyExploded) {
-            Audio::play(SoundId::Explosion);
+            m_events.push_back(GameEvent::EnemyExploded);
         }
         m_rocksFalling = rocksFallingNow;
     }
@@ -381,6 +380,12 @@ void Game::setPaused(bool paused) {
     if (paused) {
         m_pendingMove.reset();
     }
+}
+
+std::vector<GameEvent> Game::consumeEvents() {
+    std::vector<GameEvent> events;
+    events.swap(m_events);
+    return events;
 }
 
 int Game::timeRemainingMs() const {

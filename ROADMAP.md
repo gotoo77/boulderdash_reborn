@@ -13,7 +13,7 @@ et par le smoke test Chromium automatisé.
 | --- | --- | --- |
 | Gameplay principal | ✅ Fonctionnel | Déplacement, creusement, poussée, gravité, ennemis, score et vies |
 | Build desktop | ✅ Fiabilisé | Build CMake vierge réussi sur Fedora ARM64 avec les dépendances Conan existantes |
-| Tests automatisés | ✅ Actifs | 20 scénarios, exécutés par CTest |
+| Tests automatisés | ✅ Actifs | 21 scénarios, exécutés par CTest, dont une passe ASan/UBSan |
 | Données de niveaux | ✅ Contrôlées | Dimensions, bordures, joueur et sortie validés automatiquement |
 | Traductions | ✅ Contrôlées | Parité des clés EN/FR/JP validée automatiquement |
 | Exécution desktop | ✅ Vérifiée | Démarrage headless avec chargement des assets |
@@ -95,20 +95,20 @@ Objectif : couvrir les règles qui peuvent casser le score ou la progression.
 Critère de sortie : le parcours des quatre niveaux, le game over et la victoire
 sont reproductibles par des tests de logique déterministes.
 
-## P2 — réduire la dette technique
+## P2 — réduire la dette technique ✅ Terminé
 
 Objectif : rendre les changements d’interface et de gameplay plus simples.
 
-- [ ] Découper `main.cpp` en application, gestion des écrans, gestion des entrées
+- [x] Découper `main.cpp` en application, gestion des écrans, gestion des entrées
   et boucle gameplay.
-- [ ] Retirer la dépendance audio de `Game` et produire des événements consommés
+- [x] Retirer la dépendance audio de `Game` et produire des événements consommés
   par la couche SDL.
 - [x] Remplacer le parseur JSON manuel de `Config` par `nlohmann_json` avec une
   validation explicite et des messages d’erreur précis.
-- [ ] Séparer les exemples de menu du binaire de production.
-- [ ] Nettoyer les fichiers expérimentaux (`tmp_sim*.cpp`, `dev_backup.py`) après
+- [x] Séparer les exemples de menu du binaire de production.
+- [x] Nettoyer les fichiers expérimentaux (`tmp_sim*.cpp`, `dev_backup.py`) après
   récupération éventuelle de leur contenu utile.
-- [ ] Ajouter des tests sous AddressSanitizer et UndefinedBehaviorSanitizer.
+- [x] Ajouter des tests sous AddressSanitizer et UndefinedBehaviorSanitizer.
 
 Critère de sortie : le cœur du jeu se compile et se teste sans SDL ni audio, et
 le point d’entrée ne porte plus la logique des différents écrans.

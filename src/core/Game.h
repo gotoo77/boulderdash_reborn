@@ -21,6 +21,18 @@ struct GameRules {
     int respawnDelayMs = 5000;
 };
 
+enum class GameEvent : std::uint8_t {
+    PlayerWalked,
+    DirtDug,
+    RockMoved,
+    DiamondCollected,
+    PlayerDied,
+    ExitUnlocked,
+    DiamondFallStarted,
+    EnemyExploded,
+    TimeWarning,
+};
+
 class Game {
 public:
     static constexpr int TimeWarningThresholdMs = 15000;
@@ -31,6 +43,7 @@ public:
     void queueMove(Direction dir);
     void setPaused(bool paused);
     bool paused() const { return m_paused; }
+    std::vector<GameEvent> consumeEvents();
 
     Grid& grid() { return m_grid; }
     const Grid& grid() const { return m_grid; }
@@ -81,4 +94,5 @@ private:
     bool m_rocksFalling = false;
     int m_lastTimeWarningSecond = -1;
     bool m_paused = false;
+    std::vector<GameEvent> m_events;
 };
