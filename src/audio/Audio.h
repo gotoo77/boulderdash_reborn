@@ -13,6 +13,7 @@ enum class SoundId : std::uint8_t {
 
 struct Audio {
     static bool init();
+    static void resume();
     static void shutdown();
     static void play(SoundId id);
     static void playMenuMusic();

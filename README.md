@@ -33,9 +33,63 @@ Pour ouvrir le menu d’administration interactif :
 uv run manage.py
 ```
 
+Si `fzf` est disponible, le menu se parcourt avec les flèches haut/bas et se
+filtre directement en saisissant quelques lettres. Entrée lance l’action et
+Échap ferme la console. Sans `fzf`, le menu numérique reste disponible.
+
 Les mêmes actions sont disponibles sans interaction, par exemple
 `uv run manage.py test`, `uv run manage.py verify` ou
 `uv run manage.py status`.
+
+Pour repartir d’un build vierge :
+
+```bash
+uv run manage.py clean
+uv run manage.py rebuild
+uv run manage.py clean-web
+uv run manage.py rebuild-web
+```
+
+### Build WebAssembly
+
+Installer une copie locale d’[Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html),
+puis configurer et compiler :
+
+```bash
+uv run manage.py install-web-sdk
+uv run manage.py configure-web
+uv run manage.py build-web
+uv run manage.py verify-web
+uv run playwright install chromium
+uv run manage.py smoke-web
+```
+
+La version du SDK est épinglée à Emscripten 6.0.6. Conan utilise le profil
+cross-compilation versionné `profiles/emscripten`. Le smoke test ouvre Chromium,
+attend le menu, simule Entrée et vérifie le chargement du niveau 1.
+
+Pour compiler, vérifier, démarrer un serveur local et ouvrir le navigateur :
+
+```bash
+./web.sh
+```
+
+Le serveur utilise par défaut `http://127.0.0.1:8000/boulderdash.html`.
+Un autre port peut être choisi avec `./web.sh --port 8080`.
+Comme l’exigent les navigateurs, le contexte audio est activé au premier clic
+ou au premier appui sur une touche dans la page.
+
+### Validation stricte et CI
+
+Pour reproduire localement les avertissements traités comme erreurs :
+
+```bash
+BOULDERDASH_STRICT_WARNINGS=1 uv run manage.py verify
+BOULDERDASH_STRICT_WARNINGS=1 uv run manage.py smoke-web
+```
+
+Le workflow `.github/workflows/ci.yml` exécute ces validations sur Linux pour
+le build desktop et pour WebAssembly dans Chromium.
 
 ### Build avec Conan (nlohmann::json)
 

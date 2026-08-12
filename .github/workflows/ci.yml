@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BOULDERDASH_STRICT_WARNINGS: "1"
+
+jobs:
+  desktop:
+    name: Desktop Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            cmake \
+            libsdl2-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev \
+            libpng-dev \
+            pkg-config
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Synchronize Python tools
+        run: uv sync --frozen
+
+      - name: Detect Conan build profile
+        run: uv run conan profile detect --force
+
+      - name: Build, test and smoke-test desktop
+        run: uv run manage.py verify
+
+  web:
+    name: WebAssembly Chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Synchronize Python tools
+        run: uv sync --frozen
+
+      - name: Detect Conan build profile
+        run: uv run conan profile detect --force
+
+      - name: Install Emscripten 6.0.6
+        run: uv run manage.py install-web-sdk
+
+      - name: Install Chromium and its dependencies
+        run: uv run playwright install --with-deps chromium
+
+      - name: Build and smoke-test WebAssembly
+        run: >-
+          uv run manage.py smoke-web
+          --browser chromium
+          --screenshot web-smoke.png
+
+      - name: Upload browser smoke-test screenshot
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: web-smoke
+          path: web-smoke.png
+          if-no-files-found: ignore
+          retention-days: 7

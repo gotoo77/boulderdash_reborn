@@ -4,10 +4,10 @@ Dernière mise à jour : 12 août 2026.
 
 ## État actuel
 
-Le projet est un prototype jouable sur desktop. Le build natif et les tests sont
-opérationnels. La cible WebAssembly existe, mais sa reconstruction reste à
-valider avec une installation Emscripten et une dépendance `nlohmann_json`
-disponible pour cette toolchain.
+Le projet est un prototype jouable sur desktop. Le build natif, les tests et la
+cible WebAssembly sont opérationnels. Le build Web a été reconstruit avec
+Emscripten 6.0.6, puis le menu et le premier niveau ont été chargés dans Firefox
+et par le smoke test Chromium automatisé.
 
 | Domaine | État | Validation actuelle |
 | --- | --- | --- |
@@ -17,11 +17,11 @@ disponible pour cette toolchain.
 | Données de niveaux | ✅ Contrôlées | Dimensions, bordures, joueur et sortie validés automatiquement |
 | Traductions | ✅ Contrôlées | Parité des clés EN/FR/JP validée automatiquement |
 | Exécution desktop | ✅ Vérifiée | Démarrage headless avec chargement des assets |
-| Packaging Web | 🟡 Corrigé, non validé | `assets/` et `cfg/` sont préchargés ; rebuild Emscripten restant |
+| Packaging Web | ✅ Vérifié | Build Emscripten 6.0.6, menu et niveau 1 rendus dans Firefox et Chromium avec `assets/` et `cfg/` |
 | Outils Python/Conan | ✅ Reproductibles | UV, Python 3.12, Conan 2.31.2 et Pillow sont verrouillés |
 | Gestion de versions | ✅ Active | `main` suit `origin/main` et l’état initial est publié |
 | Visibilité GitHub | ✅ Privée | `gotoo77/boulderdash_reborn` est privé pendant l’audit des assets |
-| CI | ⬜ À faire | Aucun workflow automatique |
+| CI | ✅ Validée | Workflow GitHub Actions desktop + Web/Chromium exécuté avec succès |
 
 ## Terminé — fiabilisation initiale
 
@@ -42,9 +42,13 @@ disponible pour cette toolchain.
   fichiers temporaires.
 - [x] Ajouter un lanceur `run.sh` et une console d’administration Python.
 - [x] Gérer Python, Conan et Pillow avec UV et un lockfile partagé.
+- [x] Ajouter au menu d’administration la configuration, la compilation, la
+  vérification et le serveur local WebAssembly.
+- [x] Rendre la boucle principale au navigateur, préférer un renderer SDL
+  logiciel sur le Web et reprendre Web Audio après la première interaction.
 - [x] Ajouter la licence MIT au code et séparer explicitement le statut des assets.
 
-## P0 — rendre chaque livraison reproductible
+## P0 — rendre chaque livraison reproductible ✅ Terminé
 
 Objectif : tout changement doit être compilé et testé automatiquement.
 
@@ -53,12 +57,12 @@ Objectif : tout changement doit être compilé et testé automatiquement.
 - [x] Publier le premier état sur le dépôt GitHub privé avec la licence MIT et
   l’avertissement de provenance des assets.
 - [x] Réinstaller Conan avec le Python actif et régénérer ses fichiers CMake.
-- [ ] Ajouter une CI Linux qui exécute Conan, CMake, le build et CTest.
-- [ ] Documenter ou fournir un profil Conan Emscripten.
-- [ ] Reconstruire la cible Web et vérifier que `/assets` et `/cfg` sont présents
+- [x] Ajouter une CI Linux qui exécute Conan, CMake, le build et CTest.
+- [x] Documenter ou fournir un profil Conan Emscripten.
+- [x] Reconstruire la cible Web et vérifier que `/assets` et `/cfg` sont présents
   dans le fichier `.data`.
-- [ ] Ajouter un smoke test navigateur pour le chargement du menu et d’un niveau.
-- [ ] Activer les avertissements compilateur (`-Wall -Wextra -Wpedantic`) dans
+- [x] Automatiser en CI le smoke test navigateur du menu et d’un niveau.
+- [x] Activer les avertissements compilateur (`-Wall -Wextra -Wpedantic`) dans
   la CI, puis les traiter sans masquer les diagnostics.
 
 Critère de sortie : un clone vierge produit les builds desktop et Web documentés,

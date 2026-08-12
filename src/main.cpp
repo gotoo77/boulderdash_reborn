@@ -1,10 +1,16 @@
 #include <SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include <algorithm>
 #include <clocale>
 #include <cstdio>
 #include <exception>
+#ifndef __EMSCRIPTEN__
 #include <execinfo.h>
+#include <unistd.h>
+#endif
 #include <filesystem>
 #include <fstream>
 #include <csignal>
@@ -51,6 +57,35 @@ enum class ScreenState {
     GameOver,
 };
 
+#ifdef __EMSCRIPTEN__
+EM_JS(void, reportWebState, (const char* state), {
+    Module['boulderdashState'] = UTF8ToString(state);
+});
+#else
+void reportWebState(const char*) {
+}
+#endif
+
+void reportWebState(ScreenState state) {
+    switch (state) {
+    case ScreenState::Menu:
+        reportWebState("menu");
+        break;
+    case ScreenState::Options:
+        reportWebState("options");
+        break;
+    case ScreenState::LevelSelect:
+        reportWebState("level-select");
+        break;
+    case ScreenState::Playing:
+        reportWebState("playing");
+        break;
+    case ScreenState::GameOver:
+        reportWebState("game-over");
+        break;
+    }
+}
+
 struct GameOverState {
     Uint32 startedAt = 0;
     int level = 0;
@@ -92,6 +127,7 @@ private:
 };
 
 void installCrashHandler() {
+#ifndef __EMSCRIPTEN__
     auto handler = [](int sig) {
         void* trace[64];
         const int count = backtrace(trace, 64);
@@ -101,6 +137,15 @@ void installCrashHandler() {
     };
     std::signal(SIGSEGV, handler);
     std::signal(SIGABRT, handler);
+#endif
+}
+
+void delayFrame(Uint32 milliseconds) {
+#ifdef __EMSCRIPTEN__
+    emscripten_sleep(milliseconds);
+#else
+    SDL_Delay(milliseconds);
+#endif
 }
 
 std::optional<Direction> directionFromKey(SDL_Keycode key) {
@@ -545,7 +590,20 @@ int main() {
         return 1;
     }
 
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+#ifdef __EMSCRIPTEN__
+    constexpr Uint32 preferredRenderer = SDL_RENDERER_SOFTWARE;
+    constexpr Uint32 fallbackRenderer = SDL_RENDERER_ACCELERATED;
+#else
+    constexpr Uint32 preferredRenderer = SDL_RENDERER_ACCELERATED;
+    constexpr Uint32 fallbackRenderer = SDL_RENDERER_SOFTWARE;
+#endif
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, preferredRenderer);
+    if (!renderer) {
+        Logger::warn(
+            std::string("Preferred SDL renderer unavailable, trying fallback renderer: ") + SDL_GetError(),
+            __func__);
+        renderer = SDL_CreateRenderer(window, -1, fallbackRenderer);
+    }
     if (!renderer) {
         std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << "\n";
         Audio::shutdown();
@@ -797,6 +855,10 @@ int main() {
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_KEYDOWN || event.type == SDL_MOUSEBUTTONDOWN ||
+                event.type == SDL_FINGERDOWN) {
+                Audio::resume();
+            }
             if (event.type == SDL_QUIT) {
                 running = false;
                 continue;
@@ -895,11 +957,12 @@ int main() {
         if (tileTestMode) {
             gridRenderer.drawTestPattern(windowWidth, windowHeight);
             SDL_RenderPresent(renderer);
-            SDL_Delay(16);
+            delayFrame(16);
             continue;
         }
 
         const Uint32 now = SDL_GetTicks();
+        reportWebState(screen);
 
         if (screen == ScreenState::Playing) {
             if (auto held = currentHeldDirection(heldDirections)) {
@@ -1123,7 +1186,7 @@ int main() {
             SDL_RenderPresent(renderer);
         }
 
-        SDL_Delay(screen == ScreenState::Playing ? 1 : 16);
+        delayFrame(screen == ScreenState::Playing ? 1 : 16);
     }
 
     for (auto& entry : menuTextures) {
