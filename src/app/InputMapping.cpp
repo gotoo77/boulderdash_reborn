@@ -1,7 +1,9 @@
+#define BOULDERDASH_INPUT_MAPPING_IMPLEMENTATION
 #include "InputMapping.h"
 
 #include <array>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "util/Logger.h"
@@ -356,6 +358,19 @@ bool translateGamepadEvent(SDL_Event& event) {
     return true;
 }
 
+int pollInputEvent(SDL_Event* event) {
+    if (!event) {
+        return SDL_PollEvent(nullptr);
+    }
+
+    while (SDL_PollEvent(event)) {
+        if (translateGamepadEvent(*event)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 std::optional<Direction> directionFromKey(SDL_Keycode key) {
     switch (key) {
     case SDLK_UP:
@@ -372,6 +387,10 @@ std::optional<Direction> directionFromKey(SDL_Keycode key) {
 }
 
 SDL_Keycode parseKeyFromName(const std::string& name, SDL_Keycode fallback, const char* context) {
+    // runApplication calls this after SDL and the renderer have been initialized.
+    // From that point on Application.cpp polls through pollInputEvent().
+    initializeGamepadInput();
+
     if (name.empty()) {
         return fallback;
     }
