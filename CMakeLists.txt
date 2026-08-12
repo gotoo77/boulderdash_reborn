@@ -210,6 +210,9 @@ target_link_libraries(${BD_BIN} PRIVATE nlohmann_json::nlohmann_json)
 if (BUILD_TESTING)
     add_executable(boulderdash_tests
         tests/BoulderdashTests.cpp
+        tests/GameTests.cpp
+        tests/SystemTests.cpp
+        tests/DataTests.cpp
         src/app/GameplayLoop.cpp
         src/menu/Menu.cpp
         src/menu/MenuLoader.cpp
@@ -217,7 +220,7 @@ if (BUILD_TESTING)
         src/menu/MockMenuRenderer.cpp
         src/util/Config.cpp
     )
-    target_include_directories(boulderdash_tests PRIVATE src)
+    target_include_directories(boulderdash_tests PRIVATE src tests)
     boulderdash_enable_warnings(boulderdash_tests)
     boulderdash_enable_sanitizers(boulderdash_tests)
     target_compile_definitions(boulderdash_tests PRIVATE
