@@ -8,6 +8,11 @@ enum class SoundId : std::uint8_t {
     RockFall,
     Diamond,
     Death,
+    ExitUnlock,
+    DiamondFall,
+    Explosion,
+    TimeWarning,
+    GameOver,
     Count
 };
 
@@ -18,4 +23,8 @@ struct Audio {
     static void play(SoundId id);
     static void playMenuMusic();
     static void stopMenuMusic();
+    static int musicVolume();
+    static int effectsVolume();
+    static void setMusicVolume(int percent);
+    static void setEffectsVolume(int percent);
 };

@@ -126,24 +126,38 @@ void moveFalling(
             if (!isHeavy(cell) || !cell.falling) {
                 continue;
             }
+            const CellType fallingType = cell.type;
             Cell& below = grid.at(x, y + 1);
             if (below.type == CellType::Empty) {
                 below = cell;
                 grid.at(x, y) = Cell{};
-                events.rockFell = true;
+                if (fallingType == CellType::Rock) {
+                    events.rockFell = true;
+                } else {
+                    events.diamondFell = true;
+                }
                 continue;
             }
             if (below.type == CellType::Player) {
                 markDeath(events, PlayerDeathCause::Rock);
                 explodeAndClear(grid, events, x, y + 1);
                 grid.at(x, y) = Cell{};
-                events.rockFell = true;
+                if (fallingType == CellType::Rock) {
+                    events.rockFell = true;
+                } else {
+                    events.diamondFell = true;
+                }
                 continue;
             }
             if (below.type == CellType::Enemy) {
                 explodeIntoDiamonds(grid, events, x, y + 1);
                 grid.at(x, y) = Cell{};
-                events.rockFell = true;
+                if (fallingType == CellType::Rock) {
+                    events.rockFell = true;
+                } else {
+                    events.diamondFell = true;
+                }
+                events.enemyExploded = true;
                 continue;
             }
             if (cell.type == CellType::Rock) {
@@ -170,6 +184,8 @@ void finalizeStates(Grid& grid, PlayerEvents& events) {
                     } else if (wasFalling && !willFall) {
                         events.rockFallLanded = true;
                     }
+                } else if (cell.type == CellType::Diamond && !wasFalling && willFall) {
+                    events.diamondFallStarted = true;
                 }
                 cell.falling = willFall;
                 cell.willFallNext = false;

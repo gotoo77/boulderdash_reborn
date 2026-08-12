@@ -54,15 +54,25 @@ enum class ScreenState {
     Options,
     LevelSelect,
     Playing,
+    Paused,
     GameOver,
+    Victory,
 };
 
 #ifdef __EMSCRIPTEN__
 EM_JS(void, reportWebState, (const char* state), {
     Module['boulderdashState'] = UTF8ToString(state);
 });
+EM_JS(void, reportWebUi, (const char* language, const char* fontBackend, int musicVolume, int effectsVolume), {
+    Module['boulderdashLanguage'] = UTF8ToString(language);
+    Module['boulderdashFontBackend'] = UTF8ToString(fontBackend);
+    Module['boulderdashMusicVolume'] = musicVolume;
+    Module['boulderdashEffectsVolume'] = effectsVolume;
+});
 #else
 void reportWebState(const char*) {
+}
+void reportWebUi(const char*, const char*, int, int) {
 }
 #endif
 
@@ -80,8 +90,14 @@ void reportWebState(ScreenState state) {
     case ScreenState::Playing:
         reportWebState("playing");
         break;
+    case ScreenState::Paused:
+        reportWebState("paused");
+        break;
     case ScreenState::GameOver:
         reportWebState("game-over");
+        break;
+    case ScreenState::Victory:
+        reportWebState("victory");
         break;
     }
 }
@@ -105,12 +121,23 @@ struct TextStyle {
 };
 
 struct OptionsScreenStyle {
-    TextStyle title{ SDL_Color{ 255, 255, 255, 255 }, 4, 0.9f, 0.16f };
-    TextStyle lines{ SDL_Color{ 180, 180, 180, 255 }, 2, 0.9f, 0.30f };
-    TextStyle hints{ SDL_Color{ 180, 180, 180, 255 }, 1, 0.9f, 0.82f };
-    float lineSpacing = 0.07f;
-    float hintSpacing = 0.055f;
+    TextStyle title{ SDL_Color{ 255, 112, 67, 255 }, 2, 0.8f, 0.08f };
+    TextStyle lines{ SDL_Color{ 0, 255, 247, 255 }, 1, 0.88f, 0.28f };
+    TextStyle hints{ SDL_Color{ 111, 195, 247, 255 }, 1, 0.88f, 0.70f };
+    float lineSpacing = 0.09f;
+    float hintSpacing = 0.06f;
 };
+
+constexpr int kOptionCount = 3;
+constexpr int kVolumeStep = 10;
+
+bool isVolumeIncreaseKey(SDL_Keycode key) {
+    return key == SDLK_PLUS || key == SDLK_KP_PLUS || key == SDLK_EQUALS;
+}
+
+bool isVolumeDecreaseKey(SDL_Keycode key) {
+    return key == SDLK_MINUS || key == SDLK_KP_MINUS;
+}
 
 class TranslatorTextProvider : public menu::ITextProvider {
 public:
@@ -479,6 +506,30 @@ menu::Menu buildFallbackMenu(const Translator& translator, bool devMode) {
     return addDevMenuEntry(menu::Menu(def), translator, devMode);
 }
 
+menu::Menu buildFallbackPauseMenu() {
+    menu::MenuDefinition definition;
+    definition.id = "fallback_pause_menu";
+    definition.layout.anchor = menu::AnchorPoint::Center;
+    definition.layout.spacing = 52.0f;
+    definition.layout.offsetY = 20.0f;
+    definition.itemScale = 1;
+    definition.colors.normal = menu::Color{ 220, 235, 255, 255 };
+    definition.colors.selected = menu::Color{ 255, 209, 128, 255 };
+    definition.items.push_back(menu::MenuItem{ {}, "pause.resume", "resume_game", true });
+    definition.items.push_back(menu::MenuItem{ {}, "pause.options", "open_options", true });
+    definition.items.push_back(menu::MenuItem{ {}, "pause.mainMenu", "return_main_menu", true });
+    return menu::Menu(std::move(definition));
+}
+
+menu::Menu loadPauseMenuDefinition(const std::filesystem::path& menuPath) {
+    try {
+        return menu::MenuLoader::loadFromFile(menuPath);
+    } catch (const std::exception& error) {
+        Logger::warn(std::string("Failed to load pause menu '") + menuPath.string() + "': " + error.what(), __func__);
+        return buildFallbackPauseMenu();
+    }
+}
+
 menu::Menu loadMainMenuDefinition(
     const std::filesystem::path& menuPath,
     const Translator& translator,
@@ -523,7 +574,7 @@ menu::Menu buildLevelSelectMenu(
 
 } // namespace
 
-int main() {
+int runApplication() {
     // Ensure console and SDL use a UTF-8 locale to avoid mojibake in logs/titles.
     const char* localesToTry[] = { "C.UTF-8", "en_US.UTF-8", "fr_FR.UTF-8", nullptr };
     for (const char** loc = localesToTry; *loc; ++loc) {
@@ -684,6 +735,14 @@ int main() {
     Translator translator(assetsPath / "i18n", config.language);
     Font& uiFontRef = *uiFont;
     const bool uiFontIsBitmap = dynamic_cast<BitmapFont*>(uiFont.get()) != nullptr;
+    auto reportUiState = [&]() {
+        reportWebUi(
+            translator.activeLanguage().c_str(),
+            uiFontIsBitmap ? "bitmap" : "ttf",
+            Audio::musicVolume(),
+            Audio::effectsVolume());
+    };
+    reportUiState();
     if (availableLanguages.empty()) {
         availableLanguages.push_back(LanguageEntry{ translator.activeLanguage(), translator.tr("language.name") });
     } else if (std::find_if(
@@ -694,6 +753,7 @@ int main() {
         availableLanguages.push_back(LanguageEntry{ translator.activeLanguage(), translator.tr("language.name") });
     }
     int languageSelection = 0;
+    int optionSelection = 0;
     for (std::size_t i = 0; i < availableLanguages.size(); ++i) {
         if (availableLanguages[i].code == translator.activeLanguage()) {
             languageSelection = static_cast<int>(i);
@@ -701,6 +761,7 @@ int main() {
         }
     }
     const auto menuFile = configBasePath() / "main_menu.json";
+    const auto pauseMenuFile = configBasePath() / "pause_menu.json";
     const auto optionsMenuFile = configBasePath() / "options_menu.json";
     OptionsScreenStyle optionsStyle = loadOptionsStyle(optionsMenuFile);
     std::unordered_map<std::string, SDL_Texture*> menuTextures;
@@ -725,15 +786,19 @@ int main() {
     };
 
     menu::Menu mainMenu;
+    menu::Menu pauseMenu;
     menu::Menu levelSelectMenu;
     menu::MenuManager mainMenuManager;
+    menu::MenuManager pauseMenuManager;
     menu::MenuManager levelSelectMenuManager;
     TranslatorTextProvider textProvider(translator);
     mainMenuManager.setTextProvider(&textProvider);
+    pauseMenuManager.setTextProvider(&textProvider);
     levelSelectMenuManager.setTextProvider(&textProvider);
     const int menuFontScale = uiFontIsBitmap ? 3 : 1;
     menu::SDLMenuRenderer sdlMenuRenderer(renderer, uiFontRef, menuFontScale);
     menu::SDLInputProvider menuInput;
+    menu::SDLInputProvider pauseInput;
     menu::SDLInputProvider levelSelectInput;
     menu::MenuRenderMetrics menuMetrics{ windowWidth, windowHeight, 1.0f, std::nullopt };
     auto applyMenuStyleFor = [&](const menu::Menu& menuDef) {
@@ -781,6 +846,8 @@ int main() {
         mainMenu = loadMainMenuDefinition(menuFile, translator, config.devMode);
         mainMenuManager.setMenu(mainMenu);
         registerMenuAssets(mainMenu);
+        pauseMenu = loadPauseMenuDefinition(pauseMenuFile);
+        pauseMenuManager.setMenu(pauseMenu);
         if (config.devMode) {
             levelSelectMenu = buildLevelSelectMenu(translator, levelPaths);
             levelSelectMenuManager.setMenu(levelSelectMenu);
@@ -798,6 +865,7 @@ int main() {
         lastAutoDirection.reset();
     };
     ScreenState screen = ScreenState::Menu;
+    ScreenState optionsReturnScreen = ScreenState::Menu;
     GameOverState gameOverState{};
     const Uint32 gameOverDelay = static_cast<Uint32>(config.gameOverDelayMs);
     auto updateMenuMusic = [&]() {
@@ -836,6 +904,36 @@ int main() {
         updateMenuMusic();
         return true;
     };
+    auto pauseGame = [&]() {
+        game.setPaused(true);
+        screen = ScreenState::Paused;
+        pauseMenuManager.setMenu(pauseMenu);
+        clearInputState();
+        updateMenuMusic();
+    };
+    auto resumeGame = [&]() {
+        game.setPaused(false);
+        screen = ScreenState::Playing;
+        clearInputState();
+        lastTick = SDL_GetTicks();
+        lastAutoMove = lastTick;
+        updateMenuMusic();
+    };
+    auto returnToMainMenu = [&]() {
+        rebuildGame();
+        screen = ScreenState::Menu;
+        mainMenuManager.setMenu(mainMenu);
+        updateMenuMusic();
+    };
+    auto leaveOptions = [&]() {
+        screen = optionsReturnScreen;
+        if (screen == ScreenState::Menu) {
+            mainMenuManager.setMenu(mainMenu);
+        } else if (screen == ScreenState::Paused) {
+            pauseMenuManager.setMenu(pauseMenu);
+        }
+        updateMenuMusic();
+    };
     auto fitTextScale = [&](const std::string& text, int desiredScale, float maxWidthRatio) {
         const int baseWidth = uiFontRef.textWidth(text, 1);
         const int maxWidth = static_cast<int>(static_cast<float>(windowWidth) * maxWidthRatio);
@@ -851,6 +949,26 @@ int main() {
         const int width = uiFontRef.textWidth(text, scale);
         const int x = std::max(0, (windowWidth - width) / 2);
         uiFontRef.drawText(x, y, text, color, scale);
+    };
+    auto adjustBothVolumes = [&](int delta) {
+        Audio::setMusicVolume(Audio::musicVolume() + delta);
+        Audio::setEffectsVolume(Audio::effectsVolume() + delta);
+    };
+    auto adjustSelectedOption = [&](int delta) {
+        if (optionSelection == 0 && !availableLanguages.empty()) {
+            const int total = static_cast<int>(availableLanguages.size());
+            const int direction = delta < 0 ? -1 : 1;
+            languageSelection = (languageSelection + direction + total) % total;
+            translator.setLanguage(availableLanguages[languageSelection].code);
+            reportUiState();
+            rebuildMenus();
+        } else if (optionSelection == 1) {
+            Audio::setMusicVolume(Audio::musicVolume() + delta);
+            reportUiState();
+        } else if (optionSelection == 2) {
+            Audio::setEffectsVolume(Audio::effectsVolume() + delta);
+            reportUiState();
+        }
     };
     while (running) {
         SDL_Event event;
@@ -874,15 +992,19 @@ int main() {
                 toggleFullscreen();
                 continue;
             }
+            if (event.type == SDL_KEYDOWN && event.key.repeat == 0 &&
+                screen != ScreenState::Options &&
+                (isVolumeIncreaseKey(event.key.keysym.sym) || isVolumeDecreaseKey(event.key.keysym.sym))) {
+                adjustBothVolumes(isVolumeIncreaseKey(event.key.keysym.sym) ? kVolumeStep : -kVolumeStep);
+                continue;
+            }
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
                 switch (screen) {
                 case ScreenState::Menu:
                     running = false;
                     break;
                 case ScreenState::Options:
-                    screen = ScreenState::Menu;
-                    mainMenuManager.setMenu(mainMenu);
-                    updateMenuMusic();
+                    leaveOptions();
                     break;
                 case ScreenState::LevelSelect:
                     screen = ScreenState::Menu;
@@ -890,9 +1012,18 @@ int main() {
                     updateMenuMusic();
                     break;
                 case ScreenState::Playing:
-                    running = false;
+                    pauseGame();
+                    break;
+                case ScreenState::Paused:
+                    resumeGame();
                     break;
                 case ScreenState::GameOver:
+                    rebuildGame();
+                    screen = ScreenState::Menu;
+                    mainMenuManager.setMenu(mainMenu);
+                    updateMenuMusic();
+                    break;
+                case ScreenState::Victory:
                     rebuildGame();
                     screen = ScreenState::Menu;
                     mainMenuManager.setMenu(mainMenu);
@@ -910,17 +1041,18 @@ int main() {
                 }
             } else if (screen == ScreenState::Options) {
                 if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
-                    if ((event.key.keysym.sym == SDLK_LEFT || event.key.keysym.sym == SDLK_RIGHT) &&
-                        !availableLanguages.empty()) {
-                        const int delta = (event.key.keysym.sym == SDLK_LEFT) ? -1 : 1;
-                        const int total = static_cast<int>(availableLanguages.size());
-                        languageSelection = (languageSelection + delta + total) % total;
-                        translator.setLanguage(availableLanguages[languageSelection].code);
-                        rebuildMenus();
+                    if (event.key.keysym.sym == SDLK_UP || event.key.keysym.sym == SDLK_DOWN) {
+                        const int delta = event.key.keysym.sym == SDLK_UP ? -1 : 1;
+                        optionSelection = (optionSelection + delta + kOptionCount) % kOptionCount;
+                    } else if (event.key.keysym.sym == SDLK_LEFT ||
+                        event.key.keysym.sym == SDLK_RIGHT ||
+                        isVolumeIncreaseKey(event.key.keysym.sym) ||
+                        isVolumeDecreaseKey(event.key.keysym.sym)) {
+                        const bool increase = event.key.keysym.sym == SDLK_RIGHT ||
+                            isVolumeIncreaseKey(event.key.keysym.sym);
+                        adjustSelectedOption(increase ? kVolumeStep : -kVolumeStep);
                     } else if (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_SPACE) {
-                        screen = ScreenState::Menu;
-                        mainMenuManager.setMenu(mainMenu);
-                        updateMenuMusic();
+                        leaveOptions();
                     }
                 }
             } else if (screen == ScreenState::LevelSelect) {
@@ -935,9 +1067,27 @@ int main() {
                     mainMenuManager.setMenu(mainMenu);
                     updateMenuMusic();
                 }
+            } else if (screen == ScreenState::Victory) {
+                if (event.type == SDL_KEYDOWN && event.key.repeat == 0 &&
+                    (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_SPACE)) {
+                    rebuildGame();
+                    screen = ScreenState::Menu;
+                    mainMenuManager.setMenu(mainMenu);
+                    updateMenuMusic();
+                }
+            } else if (screen == ScreenState::Paused) {
+                if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
+                    if (event.key.keysym.sym == SDLK_p) {
+                        resumeGame();
+                    } else {
+                        pauseInput.handleEvent(event);
+                    }
+                }
             } else if (screen == ScreenState::Playing) {
                 if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
-                    if (auto dir = directionFromKey(event.key.keysym.sym)) {
+                    if (event.key.keysym.sym == SDLK_p) {
+                        pauseGame();
+                    } else if (auto dir = directionFromKey(event.key.keysym.sym)) {
                         pushDirection(heldDirections, *dir);
                         game.queueMove(*dir);
                         lastAutoDirection = dir;
@@ -986,7 +1136,8 @@ int main() {
             if (game.levelComplete()) {
                 clearInputState();
                 if (!game.advanceToNextLevel()) {
-                    running = false;
+                    screen = ScreenState::Victory;
+                    updateMenuMusic();
                 }
                 continue;
             }
@@ -997,6 +1148,7 @@ int main() {
                 gameOverState.level = game.currentLevelNumber();
                 gameOverState.score = game.totalScore();
                 screen = ScreenState::GameOver;
+                Audio::play(SoundId::GameOver);
                 updateMenuMusic();
                 continue;
             }
@@ -1011,12 +1163,54 @@ int main() {
             gridRenderer.draw(game.grid());
             hud.draw(game, windowWidth);
             SDL_RenderPresent(renderer);
+        } else if (screen == ScreenState::Paused) {
+            pauseMenuManager.update(pauseInput);
+            if (auto action = pauseMenuManager.consumeAction()) {
+                if (*action == "resume_game") {
+                    resumeGame();
+                } else if (*action == "open_options") {
+                    optionsReturnScreen = ScreenState::Paused;
+                    screen = ScreenState::Options;
+                    updateMenuMusic();
+                } else if (*action == "return_main_menu") {
+                    returnToMainMenu();
+                } else {
+                    Logger::warn("Unhandled pause menu action: " + *action, __func__);
+                }
+            }
+            if (screen != ScreenState::Paused) {
+                pauseInput.endFrame();
+                continue;
+            }
+            SDL_SetWindowTitle(window, translator.tr("pause.title").c_str());
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+            gridRenderer.draw(game.grid());
+            hud.draw(game, windowWidth);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_Rect overlay{ 0, 0, windowWidth, windowHeight };
+            SDL_SetRenderDrawColor(renderer, 0, 0, 20, 190);
+            SDL_RenderFillRect(renderer, &overlay);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+            const SDL_Color titleColor{ 100, 200, 255, 255 };
+            const SDL_Color secondary{ 220, 235, 255, 255 };
+            drawCenteredText(windowHeight / 6, translator.tr("pause.title"), 2, titleColor);
+            applyMenuStyleFor(pauseMenu);
+            pauseMenuManager.render(sdlMenuRenderer, menuMetrics);
+            drawCenteredText(
+                windowHeight - 2 * uiFontRef.lineHeight(1),
+                translator.tr("pause.hint"),
+                1,
+                secondary);
+            SDL_RenderPresent(renderer);
+            pauseInput.endFrame();
         } else if (screen == ScreenState::Menu) {
             mainMenuManager.update(menuInput);
             if (auto action = mainMenuManager.consumeAction()) {
                 if (*action == "start_game") {
                     startNewGame();
                 } else if (*action == "open_options") {
+                    optionsReturnScreen = ScreenState::Menu;
                     screen = ScreenState::Options;
                     updateMenuMusic();
                 } else if (*action == "open_dev_level_select") {
@@ -1090,21 +1284,25 @@ int main() {
                 currentLanguage = availableLanguages[safeIndex];
             }
             std::vector<std::string> lines{
-                translator.tr("options.description"),
                 translator.tr("options.languageLabel") + ": " + currentLanguage.label + " (" + currentLanguage.code + ")",
+                translator.tr("options.musicVolumeLabel") + ": " + std::to_string(Audio::musicVolume()) + "%",
+                translator.tr("options.effectsVolumeLabel") + ": " + std::to_string(Audio::effectsVolume()) + "%",
             };
-            if (availableLanguages.size() > 1) {
-                lines.push_back(translator.tr("options.languageHint"));
-            }
-            lines.push_back(translator.tr("options.delayLabel") + ": " + delayText.str() + translator.tr("duration.secondsSuffix"));
             std::vector<std::string> hints{
+                translator.tr("options.controlsHint"),
+                translator.tr("options.delayLabel") + ": " + delayText.str() + translator.tr("duration.secondsSuffix"),
                 translator.tr("menu.fullscreenHint") + " " + fullscreenKeyName,
                 translator.tr("options.backHint"),
             };
             int y = static_cast<int>(optionsStyle.lines.y * static_cast<float>(windowHeight));
             const int lineSpacingPx = static_cast<int>(optionsStyle.lineSpacing * static_cast<float>(windowHeight));
-            for (const auto& line : lines) {
-                drawCenteredText(y, line, optionsStyle.lines.scale, secondary, optionsStyle.lines.maxWidth);
+            drawCenteredText(y, translator.tr("options.description"), optionsStyle.lines.scale, secondary, optionsStyle.lines.maxWidth);
+            y += lineSpacingPx;
+            for (std::size_t index = 0; index < lines.size(); ++index) {
+                const bool selected = static_cast<int>(index) == optionSelection;
+                const std::string row = std::string(selected ? "> " : "  ") + lines[index] + (selected ? " <" : "  ");
+                drawCenteredText(y, row, optionsStyle.lines.scale,
+                    selected ? titleColor : secondary, optionsStyle.lines.maxWidth);
                 y += lineSpacingPx;
             }
             int hintY = static_cast<int>(optionsStyle.hints.y * static_cast<float>(windowHeight));
@@ -1184,6 +1382,30 @@ int main() {
                 translator.tr("duration.secondsSuffix");
             drawCenteredText(windowHeight - 2 * uiFontRef.lineHeight(2), countdown, 2, secondary);
             SDL_RenderPresent(renderer);
+        } else if (screen == ScreenState::Victory) {
+            SDL_SetWindowTitle(window, translator.tr("victory.title").c_str());
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+            gridRenderer.draw(game.grid());
+            hud.draw(game, windowWidth);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_Rect overlay{ 0, 0, windowWidth, windowHeight };
+            SDL_SetRenderDrawColor(renderer, 0, 20, 10, 205);
+            SDL_RenderFillRect(renderer, &overlay);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+            const SDL_Color titleColor{ 0, 255, 127, 255 };
+            const SDL_Color secondary{ 230, 255, 235, 255 };
+            drawCenteredText(windowHeight / 3, translator.tr("victory.title"), 4, titleColor);
+            const std::string scoreLine =
+                translator.tr("victory.scoreLabel") + " " + std::to_string(game.totalScore());
+            drawCenteredText(
+                windowHeight / 3 + uiFontRef.lineHeight(4), scoreLine, 3, secondary);
+            drawCenteredText(
+                windowHeight - 2 * uiFontRef.lineHeight(2),
+                translator.tr("victory.returnHint"),
+                2,
+                secondary);
+            SDL_RenderPresent(renderer);
         }
 
         delayFrame(screen == ScreenState::Playing ? 1 : 16);
@@ -1205,4 +1427,13 @@ int main() {
 #endif
     SDL_Quit();
     return 0;
+}
+
+int main() {
+    try {
+        return runApplication();
+    } catch (const std::exception& error) {
+        std::cerr << "Fatal error: " << error.what() << '\n';
+        return 1;
+    }
 }

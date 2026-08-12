@@ -67,8 +67,10 @@ void HudRenderer::draw(const Game& game, int windowWidth) const {
 
     const int remainingMs = game.timeRemainingMs();
     SDL_Color timerColor = primary;
-    if (!game.levelComplete() && remainingMs <= 10000) {
-        timerColor = danger;
+    if (!game.levelComplete() && remainingMs > 0 &&
+        remainingMs <= Game::TimeWarningThresholdMs) {
+        const bool dangerPhase = (remainingMs / 500) % 2 == 0;
+        timerColor = dangerPhase ? danger : warning;
     } else if (game.levelComplete()) {
         timerColor = success;
     }

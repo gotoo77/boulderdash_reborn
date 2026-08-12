@@ -1,0 +1,21 @@
+{
+  "id": "pause_menu",
+  "layout": {
+    "anchor": "center",
+    "direction": "vertical",
+    "align": "center",
+    "spacing": 52,
+    "offset": { "x": 0, "y": 20 }
+  },
+  "colors": {
+    "normal": "#dcecff",
+    "selected": "#ffd180",
+    "disabled": "#666666"
+  },
+  "item_scale": 1,
+  "items": [
+    { "label_id": "pause.resume", "action": "resume_game" },
+    { "label_id": "pause.options", "action": "open_options" },
+    { "label_id": "pause.mainMenu", "action": "return_main_menu" }
+  ]
+}

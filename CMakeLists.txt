@@ -63,10 +63,8 @@ if (NOT EMSCRIPTEN)
         if (NOT PkgConfig_FOUND)
             find_package(PkgConfig REQUIRED)
         endif()
-        pkg_check_modules(SDL2_TTF QUIET SDL2_ttf)
-        if (SDL2_TTF_FOUND)
-            set(SDL2_TTF_TARGET PkgConfig::SDL2_TTF)
-        endif()
+        pkg_check_modules(SDL2_TTF REQUIRED IMPORTED_TARGET SDL2_ttf)
+        set(SDL2_TTF_TARGET PkgConfig::SDL2_TTF)
     else()
         set(SDL2_TTF_TARGET SDL2_ttf::SDL2_ttf)
     endif()
@@ -111,11 +109,23 @@ boulderdash_enable_warnings(${BD_BIN})
 if (EMSCRIPTEN)
     message(STATUS "Configuring Boulder Dash for Emscripten")
 
+    # Les répertoires préchargés ne sont pas suivis automatiquement par le
+    # linker Emscripten. Toute modification d'un asset ou d'un JSON doit donc
+    # invalider boulderdash.data et provoquer une nouvelle édition de liens.
+    file(GLOB_RECURSE BOULDERDASH_PRELOAD_FILES CONFIGURE_DEPENDS
+        LIST_DIRECTORIES false
+        "${BOULDERDASH_ASSET_DIR}/*"
+        "${BOULDERDASH_CONFIG_DIR}/*"
+    )
+    set_property(TARGET ${BD_BIN} APPEND PROPERTY LINK_DEPENDS
+        "${BOULDERDASH_PRELOAD_FILES}"
+    )
+
     # Génère boulderdash.html + js + wasm
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
 
     # Les assets sont montés dans /assets (FS virtuel)
-    target_compile_definitions(${BD_BIN} PRIVATE ASSETS_DIR="/assets")
+    target_compile_definitions(${BD_BIN} PRIVATE ASSETS_DIR="/assets" CONFIG_DIR="/cfg")
 
     # ⚠️ FLAGS OBLIGATOIRES À LA COMPILATION
     #target_compile_options(boulderdash PRIVATE
@@ -127,6 +137,7 @@ if (EMSCRIPTEN)
     target_compile_options(${BD_BIN} PRIVATE
         "-sUSE_SDL=2"
         "-sUSE_SDL_MIXER=2"
+        "-sUSE_SDL_TTF=2"
         "-sUSE_LIBPNG=1"
     )
 
@@ -134,8 +145,9 @@ if (EMSCRIPTEN)
     target_link_options(${BD_BIN} PRIVATE
         "-sUSE_SDL=2"
         "-sUSE_SDL_MIXER=2"
+        "-sUSE_SDL_TTF=2"
         "-sUSE_LIBPNG=1"
-        "-sSDL2_MIXER_FORMATS=['ogg','wav']"
+        "-sSDL2_MIXER_FORMATS=['ogg','mp3']"
         "-sALLOW_MEMORY_GROWTH=1"
         "-sFORCE_FILESYSTEM=1"
         "-sINITIAL_MEMORY=256MB"
@@ -150,13 +162,19 @@ if (EMSCRIPTEN)
 # Configuration DESKTOP
 # --------------------------------------------------
 else()
-    target_compile_definitions(${BD_BIN} PRIVATE ASSETS_DIR="${BOULDERDASH_ASSET_DIR}")
+    target_compile_definitions(${BD_BIN} PRIVATE
+        ASSETS_DIR="${BOULDERDASH_ASSET_DIR}"
+        CONFIG_DIR="${BOULDERDASH_CONFIG_DIR}"
+    )
     target_link_libraries(${BD_BIN}
         PRIVATE SDL2::SDL2 PNG::PNG ${SDL2_MIXER_TARGET}
     )
 endif()
 
-if (SDL2_TTF_TARGET)
+if (EMSCRIPTEN)
+    target_sources(${BD_BIN} PRIVATE src/render/TtfFont.cpp)
+    target_compile_definitions(${BD_BIN} PRIVATE HAS_SDL_TTF=1)
+elseif (SDL2_TTF_TARGET)
     target_sources(${BD_BIN} PRIVATE src/render/TtfFont.cpp)
     target_link_libraries(${BD_BIN} PRIVATE ${SDL2_TTF_TARGET})
     target_compile_definitions(${BD_BIN} PRIVATE HAS_SDL_TTF=1)
@@ -167,6 +185,8 @@ target_link_libraries(${BD_BIN} PRIVATE nlohmann_json::nlohmann_json)
 if (BUILD_TESTING)
     add_executable(boulderdash_tests
         tests/BoulderdashTests.cpp
+        tests/AudioStub.cpp
+        src/core/Game.cpp
         src/core/Grid.cpp
         src/systems/GravitySystem.cpp
         src/systems/EnemySystem.cpp
@@ -175,12 +195,14 @@ if (BUILD_TESTING)
         src/menu/MenuLoader.cpp
         src/menu/MenuManager.cpp
         src/menu/MockMenuRenderer.cpp
+        src/util/Config.cpp
         src/util/Logger.cpp
     )
     target_include_directories(boulderdash_tests PRIVATE src)
     boulderdash_enable_warnings(boulderdash_tests)
     target_compile_definitions(boulderdash_tests PRIVATE
         TEST_ASSET_DIR="${BOULDERDASH_ASSET_DIR}"
+        TEST_CONFIG_DIR="${BOULDERDASH_CONFIG_DIR}"
     )
     target_link_libraries(boulderdash_tests PRIVATE nlohmann_json::nlohmann_json)
     add_test(NAME boulderdash_tests COMMAND boulderdash_tests)

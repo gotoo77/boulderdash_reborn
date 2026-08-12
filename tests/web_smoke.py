@@ -25,6 +25,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-dir", type=Path, default=PROJECT_DIR / "build-web")
     parser.add_argument("--browser", choices=("chromium", "firefox"), default="chromium")
     parser.add_argument("--screenshot", type=Path)
+    parser.add_argument("--options-screenshot", type=Path)
+    parser.add_argument("--pause-screenshot", type=Path)
     return parser.parse_args()
 
 
@@ -53,6 +55,9 @@ def main() -> int:
             page.wait_for_function(
                 "window.Module?.boulderdashState === 'menu'", timeout=30_000
             )
+            page.wait_for_function(
+                "window.Module?.boulderdashFontBackend === 'ttf'", timeout=10_000
+            )
 
             canvas = page.locator("#canvas")
             dimensions = canvas.evaluate(
@@ -61,7 +66,64 @@ def main() -> int:
             if dimensions["width"] <= 0 or dimensions["height"] <= 0:
                 raise RuntimeError(f"Canvas invalide : {dimensions}")
 
+            page.keyboard.press("ArrowDown")
             page.keyboard.press("Enter")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'options'", timeout=10_000
+            )
+            page.keyboard.press("ArrowRight")
+            page.wait_for_function(
+                "window.Module?.boulderdashLanguage === 'jp'", timeout=10_000
+            )
+            page.keyboard.press("ArrowDown")
+            page.keyboard.press("Minus")
+            page.wait_for_function(
+                "window.Module?.boulderdashMusicVolume === 90", timeout=10_000
+            )
+            page.keyboard.press("ArrowDown")
+            page.keyboard.press("Minus")
+            page.wait_for_function(
+                "window.Module?.boulderdashEffectsVolume === 90", timeout=10_000
+            )
+            if args.options_screenshot:
+                args.options_screenshot.parent.mkdir(parents=True, exist_ok=True)
+                canvas.screenshot(path=args.options_screenshot)
+            page.keyboard.press("Escape")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'menu'", timeout=10_000
+            )
+            page.keyboard.press("Enter")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'playing'", timeout=10_000
+            )
+            page.keyboard.press("Escape")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'paused'", timeout=10_000
+            )
+            if args.pause_screenshot:
+                args.pause_screenshot.parent.mkdir(parents=True, exist_ok=True)
+                canvas.screenshot(path=args.pause_screenshot)
+            page.keyboard.press("ArrowDown")
+            page.keyboard.press("Enter")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'options'", timeout=10_000
+            )
+            page.keyboard.press("Escape")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'paused'", timeout=10_000
+            )
+            page.keyboard.press("Escape")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'playing'", timeout=10_000
+            )
+            page.keyboard.press("p")
+            page.wait_for_function(
+                "window.Module?.boulderdashState === 'paused'", timeout=10_000
+            )
+            page.wait_for_timeout(500)
+            if page.evaluate("window.Module?.boulderdashState") != "paused":
+                raise RuntimeError("Le jeu a quitté la pause sans commande de reprise")
+            page.keyboard.press("p")
             page.wait_for_function(
                 "window.Module?.boulderdashState === 'playing'", timeout=10_000
             )
@@ -79,7 +141,7 @@ def main() -> int:
         thread.join(timeout=2)
 
     print(
-        f"Smoke test Web réussi avec {args.browser} : menu puis niveau 1 "
+        f"Smoke test Web réussi avec {args.browser} : police TTF, japonais, volumes, pause/options et reprise "
         f"({dimensions['width']}x{dimensions['height']})."
     )
     return 0

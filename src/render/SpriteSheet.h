@@ -25,6 +25,10 @@ private:
         int x = 0;
         int y = 0;
         int frames = 1;
+        int sourceX = -1;
+        int sourceY = -1;
+        int sourceWidth = -1;
+        int sourceHeight = -1;
     };
 
     bool loadIndex(const std::filesystem::path& path);

@@ -109,11 +109,15 @@ uv run manage.py build
 - SDL2
 - SDL2_mixer
 - nlohmann_json (via Conan ou paquet système)
-- SDL2_ttf (optionnel mais recommandé pour l’affichage UTF-8 complet)
+- SDL2_ttf (requis pour l’affichage UTF-8, notamment le japonais)
 
 ## Configuration
 
 Les paramètres runtime sont dans `cfg/config.json` :
+
+Le fichier est analysé avec un parseur JSON strict. Les clés absentes conservent
+leur valeur par défaut ; un JSON mal formé, un type incorrect ou une valeur hors
+limites provoque une erreur indiquant le fichier et la clé concernés.
 
 - `tileSize` : taille d'une tuile (pixels)
 - `tickMs` : fréquence de mise à jour du gameplay
@@ -130,22 +134,57 @@ Les paramètres runtime sont dans `cfg/config.json` :
 
 Les niveaux (`assets/levels/level*.txt`) sont enchaînés automatiquement. Le HUD affiche niveau courant, score, timer et état de l'objectif (diamants restants / sortie ouverte / niveau terminé), sans dépendre du titre de fenêtre.
 
-L'interface embarque maintenant un menu principal/New Game/Options/Exit et un écran "Game Over" qui revient automatiquement vers le menu après le délai configuré. Les libellés sont traduits via des fichiers JSON simples (`assets/i18n/en.json`, `assets/i18n/fr.json` par défaut) : ajouter un nouveau langage consiste à fournir un fichier supplémentaire portant le code ISO désiré.
+Pendant une partie, `Échap` ou `P` ouvre le menu de pause. Le timer, la gravité,
+les ennemis et les entrées sont gelés ; le temps passé en pause n'est pas ajouté
+lors de la reprise. Ce menu permet de reprendre, d'ouvrir les Options — notamment
+pour régler le son — ou de revenir explicitement au menu principal. Dans Options,
+`Échap` revient à la pause sans perdre la partie en cours.
+
+Toutes les cartes livrées ont un format fixe de **40 colonnes × 22 lignes**.
+Les tests refusent une ligne trop courte ou trop longue, une ligne vide, une
+hauteur différente ou un caractère inconnu. Le fichier `.editorconfig` impose
+également les fins de ligne LF et supprime les espaces de fin de ligne.
+`uv run manage.py validate-levels` permet d'effectuer ce contrôle immédiatement.
+Le lancement depuis `manage.py` exécute ce contrôle avant la compilation et le
+chargeur C++ refuse également un niveau ne contenant pas exactement un `P` et un
+`E`, sans le remplacer silencieusement par une carte de secours.
+
+L'interface embarque maintenant un menu principal/New Game/Options/Exit, un
+écran "Game Over" qui revient automatiquement vers le menu après le délai
+configuré et un écran de victoire après le dernier niveau. Les libellés sont
+traduits via des fichiers JSON simples (`assets/i18n/en.json`,
+`assets/i18n/fr.json` par défaut) : ajouter un nouveau langage consiste à fournir
+un fichier supplémentaire portant le code ISO désiré.
 
 Une musique de menu peut être déposée dans `assets/theme/` (nommée `bd_theme_menu.ogg` ou `bd_theme_menu.wav`). Si elle est présente, elle sera jouée en boucle tant que l'on reste dans les écrans de menu.
 
 ### Police UI (UTF-8)
 
-Pour afficher correctement les accents et les caractères CJK, placez une police TTF dans `assets/ui/ui_font.ttf` (ex : Noto Sans CJK). Si SDL2_ttf n’est pas présent ou si le fichier manque, le moteur retombe sur la bitmap ASCII historique.
+La police UTF-8 livrée avec le jeu se trouve dans `assets/fonts/ui_font.ttf`. SDL2_ttf est requis sur desktop et son port Emscripten est activé dans le build Web afin d’afficher les accents et les caractères CJK. La police bitmap historique reste uniquement un secours d’exécution si le fichier TTF ne peut pas être chargé.
 
 ## Gameplay
 
-- `d` représente la terre : la taupe peut la creuser pour avancer et elle supporte les rochers tant qu'elle reste dessous.
+- `d` ou `D` représente la terre : la taupe peut la creuser pour avancer et elle supporte les rochers tant qu'elle reste dessous.
+- `E` représente la sortie vers le niveau suivant. Elle reste fermée tant que les
+  diamants requis ne sont pas collectés, puis son apparence indique qu'elle est
+  ouverte.
 - `b` représente un mur destructible : il bloque le joueur comme un mur classique mais il peut être détruit par une explosion (rocher qui tombe, ennemi ou joueur).
 - `X` représente un ennemi qui se déplace horizontalement et tue le joueur au contact.
 - Le joueur dispose d'un nombre limité de vies (défini dans `config.json`) avant le Game Over.
 - Être touché par un ennemi ou se faire écraser par un rocher qui tombe provoque l'échec immédiat du niveau.
-- Une couche audio simple (SDL2_mixer) joue les SFX pour la marche, le creusement, la chute d'un rocher, la collecte d'un diamant et la mort du joueur. Les fichiers attendus se trouvent dans `assets/sfx/`.
+- Une couche audio simple (SDL2_mixer) joue les SFX pour la marche, le creusement,
+  la chute d'un rocher ou d'un diamant, la collecte d'un diamant, le
+  déverrouillage de la sortie, les explosions et la mort du joueur. Les fichiers
+  attendus se trouvent dans `assets/sfx/`.
+
+Pendant les 15 dernières secondes d'un niveau, le chronomètre alterne entre
+orange et rouge toutes les 500 ms et un bip d'alerte retentit une fois par seconde.
+
+Les associations entre événements et fichiers audio sont centralisées dans
+`cfg/audio.json`. Chaque effet accepte un chemin relatif à `assets/` et un volume
+de 0 à 128. Ce fichier configure aussi le périphérique audio, le nombre de canaux
+de mixage, les volumes généraux `music`/`effects` (de 0 à 100) et les variantes de musique du menu. Dans l’écran Options, `↑/↓` sélectionne la langue, la musique ou les effets, puis `←/→` ou `+/-` modifie la valeur. Hors de cet écran, `+/-` ajuste les deux volumes ensemble. Le son `game_over` est joué une
+seule fois lors de l'entrée dans l'écran Game Over.
 
 ## Système de menus data-driven
 

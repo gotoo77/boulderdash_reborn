@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -78,6 +79,17 @@ int countDiamonds(const Grid& grid) {
     return total;
 }
 
+void updateExitState(Grid& grid, bool unlocked) {
+    for (int y = 0; y < grid.height(); ++y) {
+        for (int x = 0; x < grid.width(); ++x) {
+            Cell& cell = grid.at(x, y);
+            if (cell.type == CellType::Exit) {
+                cell.exitUnlocked = unlocked;
+            }
+        }
+    }
+}
+
 std::filesystem::path defaultLevelPath() {
     LOG_T("Resolving default level path");
 #ifdef ASSETS_DIR
@@ -91,8 +103,7 @@ Grid loadLevel(const std::filesystem::path& path) {
     LOG_T("Loading level file %s", path.string().c_str());
     std::ifstream input(path);
     if (!input) {
-        Logger::warn("Unable to open level file: " + path.string(), __func__);
-        return buildFallbackGrid();
+        throw std::runtime_error("Unable to open level file: " + path.string());
     }
 
     std::vector<std::string> lines;
@@ -101,26 +112,24 @@ Grid loadLevel(const std::filesystem::path& path) {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
-        if (!line.empty()) {
-            lines.push_back(line);
+        if (line.empty()) {
+            throw std::runtime_error("Level contains an empty row: " + path.string());
         }
+        lines.push_back(line);
     }
 
     if (lines.empty()) {
-        Logger::warn("Level file was empty: " + path.string(), __func__);
-        return buildFallbackGrid();
+        throw std::runtime_error("Level file is empty: " + path.string());
     }
 
     const int width = static_cast<int>(lines.front().size());
     const int height = static_cast<int>(lines.size());
     if (width < 3 || height < 3) {
-        Logger::warn("Level is too small: " + path.string(), __func__);
-        return buildFallbackGrid();
+        throw std::runtime_error("Level is too small: " + path.string());
     }
     for (const auto& row : lines) {
         if (static_cast<int>(row.size()) != width) {
-            Logger::warn("Level has inconsistent row widths: " + path.string(), __func__);
-            return buildFallbackGrid();
+            throw std::runtime_error("Level has inconsistent row widths: " + path.string());
         }
     }
     Grid grid(width, height);
@@ -141,10 +150,11 @@ Grid loadLevel(const std::filesystem::path& path) {
     }
 
     if (playerCount != 1 || exitCount != 1) {
-        Logger::warn(
-            "Level must contain exactly one player and one exit: " + path.string(),
-            __func__);
-        return buildFallbackGrid();
+        throw std::runtime_error(
+            "Invalid level " + path.string() + ": found " +
+            std::to_string(playerCount) + " player(s) and " +
+            std::to_string(exitCount) +
+            " exit(s); exactly one of each is required");
     }
 
     return grid;
@@ -178,7 +188,7 @@ Game::Game(std::vector<std::filesystem::path> levelPaths, GameRules rules)
 
 void Game::update(std::uint32_t deltaMs) {
     LOG_T("Game::update deltaMs=%u", deltaMs);
-    if (m_exitReached || m_levelFailed) {
+    if (m_paused || m_exitReached || m_levelFailed) {
         return;
     }
 
@@ -198,6 +208,14 @@ void Game::update(std::uint32_t deltaMs) {
 
     if (m_rules.timeLimitMs > 0) {
         m_elapsedMs = std::min(m_elapsedMs + delta, m_rules.timeLimitMs);
+        const int remainingMs = timeRemainingMs();
+        if (remainingMs > 0 && remainingMs <= TimeWarningThresholdMs) {
+            const int warningSecond = (remainingMs + 999) / 1000;
+            if (warningSecond != m_lastTimeWarningSecond) {
+                Audio::play(SoundId::TimeWarning);
+                m_lastTimeWarningSecond = warningSecond;
+            }
+        }
         if (m_elapsedMs >= m_rules.timeLimitMs) {
             m_levelFailed = true;
             Logger::warn("Time limit reached for level " + currentLevelName(), __func__);
@@ -206,6 +224,7 @@ void Game::update(std::uint32_t deltaMs) {
     }
 
     PlayerEvents events;
+    const bool exitWasUnlocked = exitUnlocked();
     auto explodeAround = [&](int centerX, int centerY) {
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
@@ -275,6 +294,10 @@ void Game::update(std::uint32_t deltaMs) {
         if (m_collectedDiamonds > m_totalDiamonds) {
             m_collectedDiamonds = m_totalDiamonds;
         }
+        updateExitState(m_grid, exitUnlocked());
+        if (!exitWasUnlocked && exitUnlocked()) {
+            Audio::play(SoundId::ExitUnlock);
+        }
         m_levelScore += events.diamondsCollected * m_rules.diamondValue;
         Logger::info("Diamonds collected: " + std::to_string(m_collectedDiamonds) + "/" +
             std::to_string(m_totalDiamonds),
@@ -332,6 +355,12 @@ void Game::update(std::uint32_t deltaMs) {
         if (rocksWereFalling && !rocksFallingNow && events.rockFallLanded) {
             Audio::play(SoundId::RockFall);
         }
+        if (events.diamondFallStarted) {
+            Audio::play(SoundId::DiamondFall);
+        }
+        if (events.enemyExploded) {
+            Audio::play(SoundId::Explosion);
+        }
         m_rocksFalling = rocksFallingNow;
     }
     if (handlePlayerDeath()) {
@@ -341,7 +370,17 @@ void Game::update(std::uint32_t deltaMs) {
 
 void Game::queueMove(Direction dir) {
     LOG_T("Game::queueMove dir=%d", static_cast<int>(dir));
+    if (m_paused) {
+        return;
+    }
     m_pendingMove = dir;
+}
+
+void Game::setPaused(bool paused) {
+    m_paused = paused;
+    if (paused) {
+        m_pendingMove.reset();
+    }
 }
 
 int Game::timeRemainingMs() const {
@@ -395,6 +434,7 @@ bool Game::loadLevelAt(std::size_t index) {
     m_currentLevelIndex = index;
     m_totalDiamonds = countDiamonds(m_grid);
     m_collectedDiamonds = 0;
+    updateExitState(m_grid, exitUnlocked());
     m_exitReached = false;
     m_levelFailed = false;
     m_pendingMove.reset();
@@ -406,6 +446,8 @@ bool Game::loadLevelAt(std::size_t index) {
     m_respawnPending = false;
     m_respawnElapsedMs = 0;
     m_rocksFalling = anyRockFalling();
+    m_lastTimeWarningSecond = -1;
+    m_paused = false;
     Logger::info("Loaded level " + std::to_string(currentLevelNumber()) + "/" +
         std::to_string(levelCount()) + " - " + currentLevelName(),
         __func__);

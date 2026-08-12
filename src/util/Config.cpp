@@ -3,75 +3,86 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
-#include <optional>
-#include <sstream>
+#include <nlohmann/json.hpp>
+#include <stdexcept>
+#include <string>
 
 namespace {
 
-std::string readFile(const std::filesystem::path& path) {
-    std::ifstream file(path);
-    if (!file) {
-        return {};
-    }
-    std::ostringstream oss;
-    oss << file.rdbuf();
-    return oss.str();
+using Json = nlohmann::json;
+
+[[noreturn]] void configError(
+    const std::filesystem::path& path,
+    const std::string& message) {
+    throw std::runtime_error("Invalid config " + path.string() + ": " + message);
 }
 
-std::optional<int> extractInt(const std::string& text, const std::string& key) {
-    const std::string needle = '"' + key + '"';
-    const auto keyPos = text.find(needle);
-    if (keyPos == std::string::npos) {
-        return std::nullopt;
+void readInteger(
+    const Json& root,
+    const char* key,
+    int& target,
+    int minimum,
+    const std::filesystem::path& path) {
+    const auto value = root.find(key);
+    if (value == root.end()) {
+        return;
     }
-    const auto colonPos = text.find(':', keyPos + needle.size());
-    if (colonPos == std::string::npos) {
-        return std::nullopt;
+    if (!value->is_number_integer()) {
+        configError(path, "'" + std::string(key) + "' must be an integer");
     }
-    const auto numberStart = text.find_first_of("-0123456789", colonPos + 1);
-    if (numberStart == std::string::npos) {
-        return std::nullopt;
+    const int parsed = value->get<int>();
+    if (parsed < minimum) {
+        configError(
+            path,
+            "'" + std::string(key) + "' must be >= " + std::to_string(minimum));
     }
-    const auto numberEnd = text.find_first_not_of("-0123456789", numberStart);
-    const auto length = (numberEnd == std::string::npos) ? std::string::npos : numberEnd - numberStart;
-    try {
-        return std::stoi(text.substr(numberStart, length));
-    } catch (...) {
-        return std::nullopt;
-    }
+    target = parsed;
 }
 
-std::optional<std::string> extractString(const std::string& text, const std::string& key) {
-    const std::string needle = '"' + key + '"';
-    const auto keyPos = text.find(needle);
-    if (keyPos == std::string::npos) {
-        return std::nullopt;
+void readBoolean(
+    const Json& root,
+    const char* key,
+    bool& target,
+    const std::filesystem::path& path) {
+    const auto value = root.find(key);
+    if (value == root.end()) {
+        return;
     }
-    const auto colonPos = text.find(':', keyPos + needle.size());
-    if (colonPos == std::string::npos) {
-        return std::nullopt;
+    if (value->is_boolean()) {
+        target = value->get<bool>();
+        return;
     }
-    const auto quoteStart = text.find('"', colonPos + 1);
-    if (quoteStart == std::string::npos) {
-        return std::nullopt;
-    }
-    const auto quoteEnd = text.find('"', quoteStart + 1);
-    if (quoteEnd == std::string::npos) {
-        return std::nullopt;
-    }
-    return text.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
-}
-
-LogLevel parseLevel(const std::string& value) {
-
-    const std::string lowered = [&]() {
-        std::string tmp = value;
-        for (char& c : tmp) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (value->is_number_integer()) {
+        const int parsed = value->get<int>();
+        if (parsed == 0 || parsed == 1) {
+            target = parsed == 1;
+            return;
         }
-        return tmp;
-    }();
+    }
+    configError(path, "'" + std::string(key) + "' must be a boolean or 0/1");
+}
 
+void readNonEmptyString(
+    const Json& root,
+    const char* key,
+    std::string& target,
+    const std::filesystem::path& path) {
+    const auto value = root.find(key);
+    if (value == root.end()) {
+        return;
+    }
+    if (!value->is_string() || value->get_ref<const std::string&>().empty()) {
+        configError(path, "'" + std::string(key) + "' must be a non-empty string");
+    }
+    target = value->get<std::string>();
+}
+
+LogLevel parseLevel(const std::string& value, const std::filesystem::path& path) {
+    std::string lowered = value;
+    for (char& character : lowered) {
+        character = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(character)));
+    }
     if (lowered == "trace") {
         return LogLevel::Trace;
     }
@@ -87,71 +98,51 @@ LogLevel parseLevel(const std::string& value) {
     if (lowered == "error") {
         return LogLevel::Error;
     }
-    return LogLevel::Info;
+    configError(path, "'logLevel' has unsupported value '" + value + "'");
 }
 
 } // namespace
 
 Config loadConfig(const std::filesystem::path& configPath) {
-    Config config;
-    const auto content = readFile(configPath);
-    if (content.empty()) {
-        Logger::warn("Config file missing or empty, using defaults", __func__);
-        return config;
+    std::ifstream input(configPath);
+    if (!input) {
+        throw std::runtime_error("Unable to open config file: " + configPath.string());
     }
 
-    if (auto tileSize = extractInt(content, "tileSize")) {
-        config.tileSize = *tileSize;
+    Json root;
+    try {
+        input >> root;
+    } catch (const Json::parse_error& error) {
+        configError(configPath, "malformed JSON at byte " + std::to_string(error.byte));
     }
-    if (auto tickMs = extractInt(content, "tickMs")) {
-        config.tickMs = std::max(1, *tickMs);
+    if (!root.is_object()) {
+        configError(configPath, "root value must be an object");
     }
-    if (auto moveRepeat = extractInt(content, "moveRepeatMs")) {
-        config.moveRepeatMs = std::max(1, *moveRepeat);
-    }
-    if (auto timeLimit = extractInt(content, "timeLimitMs")) {
-        config.timeLimitMs = std::max(1000, *timeLimit);
-    }
-    if (auto diamondValue = extractInt(content, "diamondValue")) {
-        config.diamondValue = std::max(1, *diamondValue);
-    }
-    if (auto exitBonus = extractInt(content, "exitBonus")) {
-        config.exitBonus = std::max(0, *exitBonus);
-    }
-    if (auto timeBonus = extractInt(content, "timeBonusPerSecond")) {
-        config.timeBonusPerSecond = std::max(0, *timeBonus);
-    }
-    if (auto enemyInterval = extractInt(content, "enemyMoveIntervalMs")) {
-        config.enemyMoveIntervalMs = std::max(1, *enemyInterval);
-    }
-    if (auto gravityStep = extractInt(content, "gravityStepMs")) {
-        config.gravityStepMs = std::max(1, *gravityStep);
-    }
-    if (auto testMode = extractInt(content, "tileTestMode")) {
-        config.tileTestMode = (*testMode) != 0;
-    }
-    if (auto level = extractString(content, "logLevel")) {
-        config.logLevel = parseLevel(*level);
-    }
-    if (auto gameOverDelay = extractInt(content, "gameOverDelayMs")) {
-        config.gameOverDelayMs = std::max(0, *gameOverDelay);
-    }
-    if (auto respawnDelay = extractInt(content, "respawnDelayMs")) {
-        config.respawnDelayMs = std::max(0, *respawnDelay);
-    }
-    if (auto language = extractString(content, "language")) {
-        config.language = *language;
-    }
-    if (auto lives = extractInt(content, "lives")) {
-        config.startingLives = std::max(1, *lives);
-    }
-    if (auto devMode = extractInt(content, "devMode")) {
-        config.devMode = (*devMode) != 0;
-    }
-    if (auto fullscreenKey = extractString(content, "fullscreenToggleKey")) {
-        if (!fullscreenKey->empty()) {
-            config.fullscreenToggleKey = *fullscreenKey;
+
+    Config config;
+    readInteger(root, "tileSize", config.tileSize, 1, configPath);
+    readInteger(root, "tickMs", config.tickMs, 1, configPath);
+    readInteger(root, "moveRepeatMs", config.moveRepeatMs, 1, configPath);
+    readInteger(root, "timeLimitMs", config.timeLimitMs, 1000, configPath);
+    readInteger(root, "diamondValue", config.diamondValue, 1, configPath);
+    readInteger(root, "exitBonus", config.exitBonus, 0, configPath);
+    readInteger(root, "timeBonusPerSecond", config.timeBonusPerSecond, 0, configPath);
+    readInteger(root, "enemyMoveIntervalMs", config.enemyMoveIntervalMs, 1, configPath);
+    readInteger(root, "gravityStepMs", config.gravityStepMs, 1, configPath);
+    readBoolean(root, "tileTestMode", config.tileTestMode, configPath);
+    readInteger(root, "gameOverDelayMs", config.gameOverDelayMs, 0, configPath);
+    readInteger(root, "respawnDelayMs", config.respawnDelayMs, 0, configPath);
+    readNonEmptyString(root, "language", config.language, configPath);
+    readInteger(root, "lives", config.startingLives, 1, configPath);
+    readBoolean(root, "devMode", config.devMode, configPath);
+    readNonEmptyString(
+        root, "fullscreenToggleKey", config.fullscreenToggleKey, configPath);
+
+    if (const auto level = root.find("logLevel"); level != root.end()) {
+        if (!level->is_string()) {
+            configError(configPath, "'logLevel' must be a string");
         }
+        config.logLevel = parseLevel(level->get<std::string>(), configPath);
     }
 
     Logger::info("Config loaded from " + configPath.string(), __func__);
