@@ -22,11 +22,11 @@ source ou les conditions d'utilisation restent inconnues.
 | Famille | Emplacement | Statut | Provenance / action |
 | --- | --- | --- | --- |
 | Tilesheet et visuels de tiles | `assets/tiles.png`, `assets/sprites/` | 🟢 | Déclaration du mainteneur : visuels générés spécifiquement pour ce projet avec ChatGPT ; ils ne proviennent pas d'une extraction de ROM. |
-| Logo GotooCorp | `assets/ui/gotoocorp_logo.png` | 🟠 | Provenance à confirmer avant publication. |
+| Logo GotooCorp | `assets/ui/gotoocorp_logo.png` | 🟢 | Création originale du mainteneur réalisée pour le projet avec ChatGPT ; aucune source graphique tierce n'a été utilisée comme asset d'entrée. |
 | SFX rétro générés | `walk.wav`, `dig.wav`, `rock_fall.wav`, `diamond.wav`, `death.wav`, `diamond_fall.wav` | 🟢 | Synthèse procédurale originale et déterministe par `tools/generate_retro_sfx.py`. Les anciens fichiers non publiables/insuffisamment sourcés ont été supprimés du HEAD ; les WAV sont générés par CMake et ne sont pas suivis par Git. Voir `assets/sfx/SOURCES.md`. |
 | Autres SFX procéduraux | `assets/sfx/exit_unlock.wav`, `assets/sfx/explosion.wav`, `assets/sfx/time_warning.wav` | 🟢 | Créations procédurales originales du projet ; distribuées avec le projet sous MIT. |
 | SFX Game Over | `assets/sfx/game-over-arcade-6435.mp3` | 🟡 | `Game Over Arcade`, myfox14 (Freesound), distribué via Pixabay sous Pixabay Content License. Voir `assets/sfx/SOURCES.md`. |
-| Musique du menu | `assets/theme/bd_theme_menu.ogg` | 🟠 | Provenance et licence à identifier. |
+| Musique du menu | `assets/theme/bd_theme_menu.ogg` | 🟠 | Le mainteneur se souvient l'avoir récupérée depuis une source annoncée comme libre d'utilisation, mais l'URL, l'auteur et la licence exacte ne sont plus connus. À retrouver ou remplacer avant publication publique. |
 | Police UI | `assets/fonts/ui_font.ttf` | 🟢 | Noto Sans JP, SIL Open Font License 1.1. Une copie de la licence est fournie dans `assets/fonts/LICENSE.OFL.txt`. |
 
 ## Détail audio
@@ -86,5 +86,5 @@ Avant d'activer une publication publique :
 - [x] remplacer les cinq captures CPC par des SFX procéduraux originaux et reproductibles ;
 - [x] remplacer le `death.wav` tiers insuffisamment sourcé par un SFX procédural original ;
 - [ ] documenter ou remplacer la musique du menu ;
-- [ ] confirmer la provenance du logo GotooCorp ;
+- [x] confirmer la provenance du logo GotooCorp ;
 - [ ] vérifier qu'aucun asset 🟠 ou 🔴 n'est inclus dans l'artefact public final.
