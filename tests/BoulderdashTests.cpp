@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -12,6 +13,7 @@
 
 #include "core/Game.h"
 #include "core/Grid.h"
+#include "app/GameplayLoop.h"
 #include "menu/MenuLoader.h"
 #include "menu/MenuManager.h"
 #include "menu/MockMenuRenderer.h"
@@ -21,14 +23,16 @@
 #include "util/Config.h"
 #include "util/Logger.h"
 
-#include "AudioStub.h"
-
 namespace {
 
 void expect(bool condition, const std::string& message) {
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+int countEvent(const std::vector<GameEvent>& events, GameEvent expected) {
+    return static_cast<int>(std::count(events.begin(), events.end(), expected));
 }
 
 class TemporaryLevels {
@@ -139,7 +143,6 @@ void testGameScoresAndAdvancesLevels() {
     const auto third = levels.write("third.txt", "#####\n#PE##\n#####\n");
     const auto fourth = levels.write("fourth.txt", "#####\n#PE##\n#####\n");
     const auto rules = deterministicRules();
-    resetTestAudio();
     Game game({ first, second, third, fourth }, rules);
 
     expect(game.totalDiamonds() == 1, "first level must count its diamond");
@@ -151,14 +154,12 @@ void testGameScoresAndAdvancesLevels() {
     expect(game.totalScore() == 10, "unbanked level score must be visible in total score");
     expect(game.exitUnlocked(), "collecting every diamond must unlock the exit");
     expect(exitCellIsUnlocked(game.grid()), "door cell must expose its unlocked visual state");
-    expect(
-        testAudioPlayCount(SoundId::ExitUnlock) == 1,
-        "collecting the final diamond must play the exit unlock sound once");
+    expect(countEvent(game.consumeEvents(), GameEvent::ExitUnlocked) == 1,
+        "collecting the final diamond must emit one exit unlock event");
 
     game.update(0);
-    expect(
-        testAudioPlayCount(SoundId::ExitUnlock) == 1,
-        "unlocked exit sound must not repeat on later updates");
+    expect(countEvent(game.consumeEvents(), GameEvent::ExitUnlocked) == 0,
+        "exit unlock event must not repeat on later updates");
 
     game.queueMove(Direction::Right);
     game.update(0);
@@ -227,65 +228,65 @@ void testGameConsumesLivesAndRespawns() {
     expect(game.levelFailed(), "game must fail when no lives remain");
 }
 
-void testFallingDiamondAndEnemyExplosionPlaySounds() {
+void testFallingDiamondAndEnemyExplosionEmitEvents() {
     TemporaryLevels levels;
     const auto level = levels.write(
         "diamond-explosion.txt",
         "#####\n#.o.#\n#.X.#\n#P.E#\n#####\n");
     auto rules = deterministicRules();
     rules.gravityStepMs = 0;
-    resetTestAudio();
     Game game({ level }, rules);
 
     game.update(0);
+    const auto firstEvents = game.consumeEvents();
     expect(
-        testAudioPlayCount(SoundId::DiamondFall) == 1,
-        "a diamond starting to fall must play its dedicated sound once");
+        countEvent(firstEvents, GameEvent::DiamondFallStarted) == 1,
+        "a diamond starting to fall must emit its dedicated event once");
     expect(
-        testAudioPlayCount(SoundId::Explosion) == 0,
-        "explosion sound must wait for the enemy collision");
+        countEvent(firstEvents, GameEvent::EnemyExploded) == 0,
+        "explosion event must wait for the enemy collision");
 
     game.update(0);
+    const auto secondEvents = game.consumeEvents();
     expect(
-        testAudioPlayCount(SoundId::DiamondFall) == 1,
-        "diamond fall sound must not repeat while the same diamond keeps falling");
+        countEvent(secondEvents, GameEvent::DiamondFallStarted) == 0,
+        "diamond fall event must not repeat while the same diamond keeps falling");
     expect(
-        testAudioPlayCount(SoundId::Explosion) == 1,
-        "a falling diamond hitting an enemy must play the explosion sound once");
+        countEvent(secondEvents, GameEvent::EnemyExploded) == 1,
+        "a falling diamond hitting an enemy must emit one explosion event");
     expect(
         countCells(game.grid(), CellType::Enemy) == 0,
         "diamond collision explosion must remove the enemy");
 }
 
-void testTimeWarningPlaysOncePerSecond() {
+void testTimeWarningEmitsOncePerSecond() {
     TemporaryLevels levels;
     const auto level = levels.write("timer-warning.txt", "#####\n#P.E#\n#####\n");
     auto rules = deterministicRules();
     rules.timeLimitMs = 16000;
-    resetTestAudio();
     Game game({ level }, rules);
 
     game.update(999);
     expect(
-        testAudioPlayCount(SoundId::TimeWarning) == 0,
-        "timer warning must remain silent above fifteen seconds");
+        countEvent(game.consumeEvents(), GameEvent::TimeWarning) == 0,
+        "timer warning event must remain absent above fifteen seconds");
     game.update(1);
     expect(
-        testAudioPlayCount(SoundId::TimeWarning) == 1,
-        "timer warning must start at fifteen seconds remaining");
+        countEvent(game.consumeEvents(), GameEvent::TimeWarning) == 1,
+        "timer warning event must start at fifteen seconds remaining");
     game.update(400);
     expect(
-        testAudioPlayCount(SoundId::TimeWarning) == 1,
-        "timer warning must not repeat within the same second");
+        countEvent(game.consumeEvents(), GameEvent::TimeWarning) == 0,
+        "timer warning event must not repeat within the same second");
     game.update(600);
     expect(
-        testAudioPlayCount(SoundId::TimeWarning) == 2,
-        "timer warning must play again on the next countdown second");
+        countEvent(game.consumeEvents(), GameEvent::TimeWarning) == 1,
+        "timer warning event must repeat on the next countdown second");
     game.update(14000);
     expect(game.levelFailed(), "timer warning scenario must still expire normally");
     expect(
-        testAudioPlayCount(SoundId::TimeWarning) == 2,
-        "time expiration must not add a late warning sound");
+        countEvent(game.consumeEvents(), GameEvent::TimeWarning) == 0,
+        "time expiration must not add a late warning event");
 }
 
 void testPauseFreezesTimerAndDiscardsInput() {
@@ -311,6 +312,26 @@ void testPauseFreezesTimerAndDiscardsInput() {
     expect(
         game.grid().at(1, 1).type == CellType::Player,
         "discarded paused input must not execute after resume");
+}
+
+void testGameplayLoopOwnsTickAndInputRepeat() {
+    TemporaryLevels levels;
+    const auto level = levels.write("gameplay-loop.txt", "######\n#P..E#\n######\n");
+    Game game({ level }, deterministicRules());
+    GameplayLoop loop(10, 20);
+    loop.reset(100);
+
+    loop.press(Direction::Right, 100, game);
+    expect(!loop.update(109, game), "gameplay loop must wait until the configured tick");
+    expect(game.grid().at(1, 1).type == CellType::Player, "input must wait for a game tick");
+    expect(loop.update(110, game), "gameplay loop must run at the configured tick");
+    expect(game.grid().at(2, 1).type == CellType::Player, "pressed direction must reach Game");
+
+    expect(loop.update(130, game), "gameplay loop must keep ticking while input is held");
+    expect(game.grid().at(3, 1).type == CellType::Player, "held direction must repeat after its delay");
+    loop.release(Direction::Right);
+    loop.update(150, game);
+    expect(game.grid().at(3, 1).type == CellType::Player, "released direction must stop repeating");
 }
 
 void testPlayerDigsAndCollects() {
@@ -674,9 +695,10 @@ int main() {
         { "game rejects multiple exits", testGameRejectsMultipleExits },
         { "game scores and advances levels", testGameScoresAndAdvancesLevels },
         { "game consumes lives and respawns", testGameConsumesLivesAndRespawns },
-        { "falling diamond and enemy explosion play sounds", testFallingDiamondAndEnemyExplosionPlaySounds },
-        { "time warning plays once per second", testTimeWarningPlaysOncePerSecond },
+        { "falling diamond and enemy explosion emit events", testFallingDiamondAndEnemyExplosionEmitEvents },
+        { "time warning emits once per second", testTimeWarningEmitsOncePerSecond },
         { "pause freezes timer and discards input", testPauseFreezesTimerAndDiscardsInput },
+        { "gameplay loop owns tick and input repeat", testGameplayLoopOwnsTickAndInputRepeat },
         { "player digs and collects", testPlayerDigsAndCollects },
         { "player pushes rock", testPlayerPushesRock },
         { "gravity has deterministic steps", testGravityHasDeterministicSteps },

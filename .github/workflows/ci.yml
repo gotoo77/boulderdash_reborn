@@ -51,6 +51,18 @@ jobs:
       - name: Build, test and smoke-test desktop
         run: uv run manage.py verify
 
+      - name: Run native tests with ASan and UBSan
+        run: |
+          uv run conan install . --output-folder=build-sanitizers --build=missing -s build_type=Debug -s compiler.cppstd=17
+          cmake -S . -B build-sanitizers \
+            -DCMAKE_TOOLCHAIN_FILE=build-sanitizers/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBOULDERDASH_SANITIZERS=ON \
+            -DBOULDERDASH_STRICT_WARNINGS=ON
+          cmake --build build-sanitizers --target boulderdash_tests --parallel
+          ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=print_stacktrace=1 \
+            ctest --test-dir build-sanitizers --output-on-failure
+
   web:
     name: WebAssembly Chromium
     runs-on: ubuntu-24.04

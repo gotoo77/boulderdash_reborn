@@ -12,6 +12,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(CTest)
 
 option(BOULDERDASH_STRICT_WARNINGS "Treat project compiler warnings as errors" OFF)
+option(BOULDERDASH_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(BOULDERDASH_BUILD_EXAMPLES "Build standalone example code" OFF)
 
 function(boulderdash_enable_warnings target)
     if (MSVC)
@@ -25,6 +27,20 @@ function(boulderdash_enable_warnings target)
             target_compile_options(${target} PRIVATE -Werror)
         endif()
     endif()
+endfunction()
+
+function(boulderdash_enable_sanitizers target)
+    if (NOT BOULDERDASH_SANITIZERS)
+        return()
+    endif()
+    if (EMSCRIPTEN OR NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR "BOULDERDASH_SANITIZERS requires a native GCC or Clang build")
+    endif()
+    target_compile_options(${target} PRIVATE
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_options(${target} PRIVATE -fsanitize=address,undefined)
 endfunction()
 
 set(BOULDERDASH_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets")
@@ -72,16 +88,30 @@ if (NOT EMSCRIPTEN)
 endif()
 
 # --------------------------------------------------
-# Target principale
+# Cœur de jeu indépendant de SDL et de l'audio
 # --------------------------------------------------
-add_executable(${BD_BIN}
-    src/main.cpp
+add_library(boulderdash_core STATIC
     src/core/Game.cpp
     src/core/Grid.cpp
-    src/audio/Audio.cpp
     src/systems/GravitySystem.cpp
     src/systems/EnemySystem.cpp
     src/systems/PlayerSystem.cpp
+    src/util/Logger.cpp
+)
+target_include_directories(boulderdash_core PUBLIC src)
+boulderdash_enable_warnings(boulderdash_core)
+boulderdash_enable_sanitizers(boulderdash_core)
+
+# --------------------------------------------------
+# Application SDL
+# --------------------------------------------------
+add_executable(${BD_BIN}
+    src/main.cpp
+    src/app/Application.cpp
+    src/app/AudioEventRouter.cpp
+    src/app/GameplayLoop.cpp
+    src/app/ScreenState.cpp
+    src/audio/Audio.cpp
     src/render/Renderer.cpp
     src/render/SpriteSheet.cpp
     src/render/HudRenderer.cpp
@@ -91,17 +121,16 @@ add_executable(${BD_BIN}
     src/menu/Menu.cpp
     src/menu/MenuLoader.cpp
     src/menu/MenuManager.cpp
-    src/menu/MockMenuRenderer.cpp
-    src/menu/MenuExample.cpp
     src/menu/sdl/SDLMenuRenderer.cpp
     src/menu/sdl/SDLInputProvider.cpp
-    src/util/Logger.cpp
     src/util/Config.cpp
     src/util/Translator.cpp
 )
 
 target_include_directories(${BD_BIN} PRIVATE src)
 boulderdash_enable_warnings(${BD_BIN})
+boulderdash_enable_sanitizers(${BD_BIN})
+target_link_libraries(${BD_BIN} PRIVATE boulderdash_core)
 
 # --------------------------------------------------
 # Configuration EMSCRIPTEN (WEB)
@@ -185,25 +214,37 @@ target_link_libraries(${BD_BIN} PRIVATE nlohmann_json::nlohmann_json)
 if (BUILD_TESTING)
     add_executable(boulderdash_tests
         tests/BoulderdashTests.cpp
-        tests/AudioStub.cpp
-        src/core/Game.cpp
-        src/core/Grid.cpp
-        src/systems/GravitySystem.cpp
-        src/systems/EnemySystem.cpp
-        src/systems/PlayerSystem.cpp
+        src/app/GameplayLoop.cpp
         src/menu/Menu.cpp
         src/menu/MenuLoader.cpp
         src/menu/MenuManager.cpp
         src/menu/MockMenuRenderer.cpp
         src/util/Config.cpp
-        src/util/Logger.cpp
     )
     target_include_directories(boulderdash_tests PRIVATE src)
     boulderdash_enable_warnings(boulderdash_tests)
+    boulderdash_enable_sanitizers(boulderdash_tests)
     target_compile_definitions(boulderdash_tests PRIVATE
         TEST_ASSET_DIR="${BOULDERDASH_ASSET_DIR}"
         TEST_CONFIG_DIR="${BOULDERDASH_CONFIG_DIR}"
     )
-    target_link_libraries(boulderdash_tests PRIVATE nlohmann_json::nlohmann_json)
+    target_link_libraries(boulderdash_tests PRIVATE
+        boulderdash_core
+        nlohmann_json::nlohmann_json
+    )
     add_test(NAME boulderdash_tests COMMAND boulderdash_tests)
+endif()
+
+if (BOULDERDASH_BUILD_EXAMPLES)
+    add_library(boulderdash_menu_example STATIC
+        src/menu/MenuExample.cpp
+        src/menu/Menu.cpp
+        src/menu/MenuLoader.cpp
+        src/menu/MenuManager.cpp
+        src/menu/MockMenuRenderer.cpp
+    )
+    target_include_directories(boulderdash_menu_example PRIVATE src)
+    target_link_libraries(boulderdash_menu_example PRIVATE nlohmann_json::nlohmann_json)
+    boulderdash_enable_warnings(boulderdash_menu_example)
+    boulderdash_enable_sanitizers(boulderdash_menu_example)
 endif()

@@ -89,7 +89,20 @@ BOULDERDASH_STRICT_WARNINGS=1 uv run manage.py smoke-web
 ```
 
 Le workflow `.github/workflows/ci.yml` exécute ces validations sur Linux pour
-le build desktop et pour WebAssembly dans Chromium.
+le build desktop et pour WebAssembly dans Chromium. Les tests natifs sont aussi
+recompilés et exécutés avec AddressSanitizer et UndefinedBehaviorSanitizer.
+
+Pour reproduire cette validation mémoire localement :
+
+```bash
+uv run conan install . --output-folder=build-sanitizers --build=missing -s build_type=Debug -s compiler.cppstd=17
+cmake -S . -B build-sanitizers \
+  -DCMAKE_TOOLCHAIN_FILE=build-sanitizers/conan_toolchain.cmake \
+  -DCMAKE_BUILD_TYPE=Debug -DBOULDERDASH_SANITIZERS=ON
+cmake --build build-sanitizers --target boulderdash_tests --parallel
+ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=print_stacktrace=1 \
+  ctest --test-dir build-sanitizers --output-on-failure
+```
 
 ### Build avec Conan (nlohmann::json)
 
@@ -189,6 +202,8 @@ seule fois lors de l'entrée dans l'écran Game Over.
 ## Système de menus data-driven
 
 Un framework de menus indépendant de SDL est disponible dans `src/menu/`. Les menus sont décrits en JSON (ex. `cfg/main_menu.json`), chargés via `menu::MenuLoader` et rendus via une implémentation d'`IMenuRenderer`. La documentation détaillée (architecture, exemple d'intégration, mocks de tests) se trouve dans `docs/MenuSystem.md`.
+Le code d'exemple est exclu du binaire de production et peut être compilé
+séparément avec `-DBOULDERDASH_BUILD_EXAMPLES=ON`.
 
 ## TODO
 
@@ -206,6 +221,10 @@ ctest --test-dir build --output-on-failure
 
 Les tests couvrent actuellement les systèmes principaux, la navigation des
 menus, la structure des niveaux et la cohérence des traductions.
+
+Le code est organisé autour de `boulderdash_core`, bibliothèque de gameplay
+sans SDL ni audio. `src/app/` porte l'application SDL, les états d'écran, les
+entrées et la cadence de jeu; le `main.cpp` ne fait qu'appeler l'application.
 
 ## INSTALL REMARKS
 j ai du faire
