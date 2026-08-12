@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a0e12">
+  <title>Boulderdash Reborn</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a0e12;
+      color: #f4f4f4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #0a0e12;
+      overscroll-behavior: none;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+        max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    }
+
+    #app {
+      width: min(100%, 1280px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #game-stage {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    #canvas {
+      display: block;
+      width: min(100%, 1280px);
+      height: auto;
+      max-height: calc(100dvh - 24px);
+      object-fit: contain;
+      background: #000;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      outline: none;
+    }
+
+    #status {
+      min-height: 1.2em;
+      margin: 0;
+      font-size: 12px;
+      opacity: 0.7;
+      text-align: center;
+    }
+
+    #touch-controls {
+      display: none;
+      width: min(100%, 560px);
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 14px;
+      padding: 4px 8px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .touch-capable #canvas {
+      max-height: calc(100dvh - 205px);
+    }
+
+    .touch-capable #touch-controls {
+      display: grid;
+    }
+
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 54px);
+      grid-template-rows: repeat(3, 54px);
+      justify-content: center;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .system-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .touch-button {
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      min-width: 54px;
+      min-height: 54px;
+      border-radius: 13px;
+      font: inherit;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .touch-button.action {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      font-size: 18px;
+    }
+
+    .touch-button.start {
+      min-width: 72px;
+      min-height: 38px;
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+    }
+
+    .touch-button.active,
+    .touch-button:active {
+      background: rgba(255, 255, 255, 0.34);
+      transform: translateY(1px);
+    }
+
+    .up { grid-column: 2; grid-row: 1; }
+    .left { grid-column: 1; grid-row: 2; }
+    .down { grid-column: 2; grid-row: 2; }
+    .right { grid-column: 3; grid-row: 2; }
+
+    @media (max-width: 620px) {
+      #app {
+        gap: 4px;
+      }
+
+      #status {
+        display: none;
+      }
+
+      #touch-controls {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+          "dpad actions"
+          "start start";
+        gap: 6px 12px;
+      }
+
+      .dpad {
+        grid-area: dpad;
+        grid-template-columns: repeat(3, 48px);
+        grid-template-rows: repeat(3, 48px);
+      }
+
+      .actions {
+        grid-area: actions;
+      }
+
+      .system-actions {
+        grid-area: start;
+      }
+
+      .touch-button {
+        min-width: 48px;
+        min-height: 48px;
+      }
+
+      .touch-button.action {
+        width: 58px;
+        height: 58px;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 560px) {
+      body {
+        padding-top: max(4px, env(safe-area-inset-top));
+        padding-bottom: max(4px, env(safe-area-inset-bottom));
+      }
+
+      .touch-capable #app {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        grid-template-rows: 1fr;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .touch-capable #game-stage {
+        min-width: 0;
+      }
+
+      .touch-capable #canvas {
+        width: 100%;
+        max-height: calc(100dvh - 8px);
+      }
+
+      .touch-capable #touch-controls {
+        width: 300px;
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+          "dpad actions"
+          "start start";
+      }
+
+      .touch-capable #status {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <section id="game-stage" aria-label="Boulderdash Reborn">
+      <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+    </section>
+
+    <p id="status" aria-live="polite">Chargement…</p>
+
+    <section id="touch-controls" aria-label="Contrôles tactiles">
+      <div class="dpad" aria-label="Directions">
+        <button class="touch-button up" type="button" data-action="0" aria-label="Haut">▲</button>
+        <button class="touch-button left" type="button" data-action="2" aria-label="Gauche">◀</button>
+        <button class="touch-button down" type="button" data-action="1" aria-label="Bas">▼</button>
+        <button class="touch-button right" type="button" data-action="3" aria-label="Droite">▶</button>
+      </div>
+
+      <div class="system-actions">
+        <button class="touch-button start" type="button" data-action="6">START</button>
+      </div>
+
+      <div class="actions" aria-label="Actions">
+        <button class="touch-button action" type="button" data-action="5" aria-label="Retour">B</button>
+        <button class="touch-button action" type="button" data-action="4" aria-label="Valider">A</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const statusElement = document.getElementById('status');
+    const canvasElement = document.getElementById('canvas');
+
+    var Module = {
+      canvas: canvasElement,
+      setStatus(text) {
+        if (statusElement) {
+          statusElement.textContent = text || '';
+        }
+      },
+      printErr(text) {
+        console.error(text);
+      },
+    };
+    window.Module = Module;
+
+    const touchCapable =
+      navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+    if (touchCapable) {
+      document.documentElement.classList.add('touch-capable');
+    }
+
+    const activePointers = new Map();
+
+    function sendTouchAction(action, pressed) {
+      const input = Module._boulderdash_web_input;
+      if (typeof input === 'function') {
+        input(action, pressed ? 1 : 0);
+      }
+    }
+
+    function releasePointer(pointerId, button) {
+      const action = activePointers.get(pointerId);
+      if (action === undefined) {
+        return;
+      }
+      activePointers.delete(pointerId);
+      button.classList.remove('active');
+      sendTouchAction(action, false);
+    }
+
+    for (const button of document.querySelectorAll('.touch-button')) {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        const action = Number(button.dataset.action);
+        if (!Number.isInteger(action)) {
+          return;
+        }
+        button.setPointerCapture?.(event.pointerId);
+        activePointers.set(event.pointerId, action);
+        button.classList.add('active');
+        sendTouchAction(action, true);
+      });
+
+      button.addEventListener('pointerup', (event) => {
+        event.preventDefault();
+        releasePointer(event.pointerId, button);
+      });
+
+      button.addEventListener('pointercancel', (event) => {
+        releasePointer(event.pointerId, button);
+      });
+
+      button.addEventListener('lostpointercapture', (event) => {
+        releasePointer(event.pointerId, button);
+      });
+
+      button.addEventListener('contextmenu', (event) => event.preventDefault());
+    }
+
+    window.addEventListener('blur', () => {
+      for (const [pointerId, action] of activePointers) {
+        sendTouchAction(action, false);
+        activePointers.delete(pointerId);
+      }
+      for (const button of document.querySelectorAll('.touch-button.active')) {
+        button.classList.remove('active');
+      }
+    });
+  </script>
+
+  {{{ SCRIPT }}}
+</body>
+</html>
