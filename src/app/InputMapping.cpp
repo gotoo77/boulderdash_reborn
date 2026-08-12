@@ -6,6 +6,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 #include "util/Logger.h"
 
 namespace {
@@ -126,7 +130,7 @@ void pushKeyboardEvent(Uint32 type, SDL_Keycode key, Uint32 timestamp) {
     synthetic.common.timestamp = timestamp;
     rewriteAsKeyboardEvent(synthetic, type, key);
     if (SDL_PushEvent(&synthetic) < 0) {
-        Logger::warn(std::string("Unable to queue synthetic gamepad key: ") + SDL_GetError(), __func__);
+        Logger::warn(std::string("Unable to queue synthetic input key: ") + SDL_GetError(), __func__);
     }
 }
 
@@ -254,6 +258,39 @@ void openFirstAvailableController() {
 }
 
 } // namespace
+
+#ifdef __EMSCRIPTEN__
+extern "C" EMSCRIPTEN_KEEPALIVE void boulderdash_web_input(int action, int pressed) {
+    SDL_Keycode key = SDLK_UNKNOWN;
+    switch (action) {
+    case 0:
+        key = SDLK_UP;
+        break;
+    case 1:
+        key = SDLK_DOWN;
+        break;
+    case 2:
+        key = SDLK_LEFT;
+        break;
+    case 3:
+        key = SDLK_RIGHT;
+        break;
+    case 4:
+        key = SDLK_RETURN;
+        break;
+    case 5:
+        key = SDLK_ESCAPE;
+        break;
+    case 6:
+        key = SDLK_p;
+        break;
+    default:
+        return;
+    }
+
+    pushKeyboardEvent(pressed ? SDL_KEYDOWN : SDL_KEYUP, key, SDL_GetTicks());
+}
+#endif
 
 void initializeGamepadInput() {
     if (g_gamepadBridgeInitialized) {

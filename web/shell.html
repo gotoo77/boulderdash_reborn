@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a0e12">
+  <title>Boulderdash Reborn</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a0e12;
+      color: #fff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      background: #0a0e12;
+      overscroll-behavior: none;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right))
+        max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+      gap: 8px;
+    }
+
+    #canvas {
+      display: block;
+      width: min(100%, 1280px);
+      height: auto;
+      max-height: calc(100dvh - 8px);
+      object-fit: contain;
+      background: #000;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      outline: none;
+    }
+
+    #touch-controls {
+      display: none;
+      width: min(100%, 560px);
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      padding: 4px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .touch-capable body {
+      flex-direction: column;
+    }
+
+    .touch-capable #canvas {
+      max-height: calc(100dvh - 190px);
+    }
+
+    .touch-capable #touch-controls {
+      display: grid;
+    }
+
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 52px);
+      grid-template-rows: repeat(3, 52px);
+      justify-content: center;
+    }
+
+    .actions,
+    .system-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .touch-button {
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      min-width: 52px;
+      min-height: 52px;
+      border-radius: 13px;
+      font: inherit;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .touch-button.action {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      font-size: 18px;
+    }
+
+    .touch-button.start {
+      min-width: 72px;
+      min-height: 38px;
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+    }
+
+    .touch-button.active,
+    .touch-button:active {
+      background: rgba(255, 255, 255, 0.34);
+      transform: translateY(1px);
+    }
+
+    .up { grid-column: 2; grid-row: 1; }
+    .left { grid-column: 1; grid-row: 2; }
+    .down { grid-column: 2; grid-row: 2; }
+    .right { grid-column: 3; grid-row: 2; }
+
+    @media (max-width: 620px) {
+      #touch-controls {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+          "dpad actions"
+          "start start";
+        gap: 4px 10px;
+      }
+
+      .dpad {
+        grid-area: dpad;
+        grid-template-columns: repeat(3, 46px);
+        grid-template-rows: repeat(3, 46px);
+      }
+
+      .actions { grid-area: actions; }
+      .system-actions { grid-area: start; }
+
+      .touch-button {
+        min-width: 46px;
+        min-height: 46px;
+      }
+
+      .touch-button.action {
+        width: 56px;
+        height: 56px;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 560px) {
+      .touch-capable body {
+        flex-direction: row;
+      }
+
+      .touch-capable #canvas {
+        width: min(calc(100vw - 300px), 1280px);
+        max-height: calc(100dvh - 8px);
+      }
+
+      .touch-capable #touch-controls {
+        width: 286px;
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+          "dpad actions"
+          "start start";
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" tabindex="-1" aria-label="Boulderdash Reborn" oncontextmenu="event.preventDefault()"></canvas>
+
+  <section id="touch-controls" aria-label="Contrôles tactiles">
+    <div class="dpad" aria-label="Directions">
+      <button class="touch-button up" type="button" data-action="0" aria-label="Haut">▲</button>
+      <button class="touch-button left" type="button" data-action="2" aria-label="Gauche">◀</button>
+      <button class="touch-button down" type="button" data-action="1" aria-label="Bas">▼</button>
+      <button class="touch-button right" type="button" data-action="3" aria-label="Droite">▶</button>
+    </div>
+
+    <div class="system-actions">
+      <button class="touch-button start" type="button" data-action="6">START</button>
+    </div>
+
+    <div class="actions" aria-label="Actions">
+      <button class="touch-button action" type="button" data-action="5" aria-label="Retour">B</button>
+      <button class="touch-button action" type="button" data-action="4" aria-label="Valider">A</button>
+    </div>
+  </section>
+
+  <script>
+    const canvasElement = document.getElementById('canvas');
+
+    var Module = {
+      canvas: canvasElement,
+      setStatus() {},
+      printErr(text) { console.error(text); },
+    };
+    window.Module = Module;
+
+    if (navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches) {
+      document.documentElement.classList.add('touch-capable');
+    }
+
+    const activePointers = new Map();
+
+    function sendTouchAction(action, pressed) {
+      const input = Module._boulderdash_web_input;
+      if (typeof input !== 'function') {
+        console.error('Boulderdash touch bridge is not available yet.');
+        return;
+      }
+      input(action, pressed ? 1 : 0);
+    }
+
+    function releasePointer(pointerId, button) {
+      const action = activePointers.get(pointerId);
+      if (action === undefined) {
+        return;
+      }
+      activePointers.delete(pointerId);
+      button.classList.remove('active');
+      sendTouchAction(action, false);
+    }
+
+    for (const button of document.querySelectorAll('.touch-button')) {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        const action = Number(button.dataset.action);
+        if (!Number.isInteger(action)) {
+          return;
+        }
+        button.setPointerCapture?.(event.pointerId);
+        activePointers.set(event.pointerId, action);
+        button.classList.add('active');
+        sendTouchAction(action, true);
+      });
+
+      button.addEventListener('pointerup', (event) => {
+        event.preventDefault();
+        releasePointer(event.pointerId, button);
+      });
+
+      button.addEventListener('pointercancel', (event) => releasePointer(event.pointerId, button));
+      button.addEventListener('lostpointercapture', (event) => releasePointer(event.pointerId, button));
+      button.addEventListener('contextmenu', (event) => event.preventDefault());
+    }
+
+    window.addEventListener('blur', () => {
+      for (const action of activePointers.values()) {
+        sendTouchAction(action, false);
+      }
+      activePointers.clear();
+      for (const button of document.querySelectorAll('.touch-button.active')) {
+        button.classList.remove('active');
+      }
+    });
+  </script>
+
+  {{{ SCRIPT }}}
+</body>
+</html>

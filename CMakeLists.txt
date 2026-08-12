@@ -169,6 +169,8 @@ target_link_libraries(${BD_BIN} PRIVATE boulderdash_core)
 if (EMSCRIPTEN)
     message(STATUS "Configuring Boulder Dash for Emscripten")
 
+    set(BOULDERDASH_WEB_SHELL "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html")
+
     # Les répertoires préchargés ne sont pas suivis automatiquement par le
     # linker Emscripten. Toute modification d'un asset ou d'un JSON doit donc
     # invalider boulderdash.data et provoquer une nouvelle édition de liens.
@@ -180,6 +182,7 @@ if (EMSCRIPTEN)
     list(APPEND BOULDERDASH_PRELOAD_FILES ${BOULDERDASH_GENERATED_SFX})
     set_property(TARGET ${BD_BIN} APPEND PROPERTY LINK_DEPENDS
         "${BOULDERDASH_PRELOAD_FILES}"
+        "${BOULDERDASH_WEB_SHELL}"
     )
 
     # Génère boulderdash.html + js + wasm
@@ -208,6 +211,7 @@ if (EMSCRIPTEN)
         "-sASSERTIONS=2"
         "-sSAFE_HEAP=1"
         "-sSTACK_OVERFLOW_CHECK=2"
+        "SHELL:--shell-file ${BOULDERDASH_WEB_SHELL}"
         "SHELL:--preload-file ${BOULDERDASH_ASSET_DIR}@/assets"
         "SHELL:--preload-file ${BOULDERDASH_CONFIG_DIR}@/cfg"
     )
