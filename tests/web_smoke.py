@@ -156,7 +156,6 @@ def main() -> int:
                 raise RuntimeError(f"Canvas mobile hors viewport : {touch_canvas_box}")
 
             down = touch_page.locator("[data-action='1']")
-            up = touch_page.locator("[data-action='0']")
             confirm = touch_page.locator("[data-action='4']")
             back = touch_page.locator("[data-action='5']")
             start = touch_page.locator("[data-action='6']")
@@ -168,7 +167,8 @@ def main() -> int:
             wait_state(touch_page, "options", "ouverture Options au tactile")
             back.click()
             wait_state(touch_page, "menu", "retour au menu au tactile")
-            up.click()
+            # Le retour depuis Options réinitialise déjà la sélection du menu
+            # principal sur « Nouvelle partie », comme le scénario clavier.
             confirm.click()
             wait_state(touch_page, "playing", "démarrage de la partie au tactile")
             start.click()
