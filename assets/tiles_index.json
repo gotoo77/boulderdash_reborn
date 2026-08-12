@@ -1,0 +1,18 @@
+{
+  "tileSize": 256,
+  "sprites": {
+    "EMPTY":            { "x": 0, "y": 0 },
+    "DIRT":             { "x": 1, "y": 0 },
+    "WALL_DESTRUCT":    { "x": 2, "y": 0 },
+    "WALL_SOLID":       { "x": 3, "y": 0 },
+    "ROCK_STABLE":      { "x": 0, "y": 1 },
+    "ROCK_FALLING":     { "x": 1, "y": 1, "frames": 2 },
+    "DIAMOND":          { "x": 2, "y": 1 },
+    "DIAMOND_FALLING":  { "x": 3, "y": 1 },
+    "PLAYER":           { "x": 1, "y": 2 },
+    "PLAYER_MOVE":      { "x": 2, "y": 2, "frames": 2 },
+    "ENEMY":            { "x": 3, "y": 2 },
+    "EXIT":             { "x": 0, "y": 0 },
+    "EXPLOSION":        { "x": 0, "y": 3, "frames": 4 }
+  }
+}

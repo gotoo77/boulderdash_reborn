@@ -1,0 +1,19 @@
+{
+  "tileSize": 24,
+  "tickMs": 33,
+  "moveRepeatMs": 120,
+  "timeLimitMs": 120000,
+  "diamondValue": 25,
+  "exitBonus": 200,
+  "timeBonusPerSecond": 5,
+  "enemyMoveIntervalMs": 200,
+  "gravityStepMs": 100,
+  "tileTestMode": 0,
+  "logLevel": "debug",
+  "gameOverDelayMs": 5000,
+  "respawnDelayMs": 5000,
+  "language": "fr",
+  "lives": 3,
+  "devMode": 0,
+  "fullscreenToggleKey": "f"
+}

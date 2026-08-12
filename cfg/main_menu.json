@@ -1,0 +1,31 @@
+{
+  "id": "main_menu",
+  "layout": {
+    "anchor": "top_center",
+    "direction": "vertical",
+    "align": "center",
+    "spacing": 36,
+    "offset": { "x": 0, "y": 300 }
+  },
+  "logo": {
+    "texture": "assets/ui/gotoocorp_logo.png",
+    "position": { "x": 0.88, "y": 0.90 },
+    "size": { "width": 280, "height": 100 }
+  },
+  "header": {
+    "title": { "color": "#ff7043", "scale": 3, "y": 0.05, "maxWidth": 0.72 },
+    "subtitle": { "color": "#4fc3f7", "scale": 2, "y": 0.18, "maxWidth": 0.72 },
+    "spacing": 14
+  },
+  "colors": {
+    "normal": "#c8c8c8",
+    "selected": "#ffd180",
+    "disabled": "#666666"
+  },
+  "item_scale": 1.5,
+  "items": [
+    { "label_id": "menu.newGame", "action": "start_game" },
+    { "label_id": "menu.options", "action": "open_options" },
+    { "label_id": "menu.exit", "action": "quit_game" }
+  ]
+}

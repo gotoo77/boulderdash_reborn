@@ -1,0 +1,18 @@
+{
+  "enabled": false,
+  "defaultFrameDurationMs": 150,
+  "sprites": {
+    "EMPTY": { "file": "empty.png" },
+    "DIRT": { "file": "dirt.png" },
+    "WALL_DESTRUCT": { "file": "wall_destructible.png" },
+    "WALL_SOLID": { "file": "wall_undestructible.png" },
+    "ROCK_STABLE": { "file": "rock_stable.png" },
+    "ROCK_FALLING": { "frames": ["rock_falling.png", "rock_stable.png"], "frameDurationMs": 120 },
+    "DIAMOND": { "file": "diamond.png" },
+    "DIAMOND_FALLING": { "frames": ["diamond_falling.png", "diamond.png"], "frameDurationMs": 120 },
+    "PLAYER": { "frames": ["player_idle1.png", "player_idle2.png"], "frameDurationMs": 150 },
+    "ENEMY": { "frames": ["enemy_idle1.png", "enemy_idle2.png"], "frameDurationMs": 180 },
+    "EXIT": { "file": "exit.png" },
+    "EXPLOSION": { "frames": ["explosion1.png", "explosion2.png", "explosion3.png", "explosion4.png"], "frameDurationMs": 80 }
+  }
+}
