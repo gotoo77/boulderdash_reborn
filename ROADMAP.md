@@ -19,7 +19,7 @@ disponible pour cette toolchain.
 | Exécution desktop | ✅ Vérifiée | Démarrage headless avec chargement des assets |
 | Packaging Web | 🟡 Corrigé, non validé | `assets/` et `cfg/` sont préchargés ; rebuild Emscripten restant |
 | Outils Python/Conan | ✅ Reproductibles | UV, Python 3.12, Conan 2.31.2 et Pillow sont verrouillés |
-| Gestion de versions | 🟡 Préparée | Dépôt Git initialisé sur `main`, remote configuré, premier commit en attente |
+| Gestion de versions | ✅ Active | `main` suit `origin/main` et l’état initial est publié |
 | Visibilité GitHub | ✅ Privée | `gotoo77/boulderdash_reborn` est privé pendant l’audit des assets |
 | CI | ⬜ À faire | Aucun workflow automatique |
 
@@ -50,8 +50,8 @@ Objectif : tout changement doit être compilé et testé automatiquement.
 
 - [x] Initialiser le dépôt Git sur `main`, configurer le remote et exclure les
   répertoires `build*`, `tools/venv` et les fichiers de travail locaux.
-- [ ] Créer le premier commit après validation de la licence et de la provenance
-  des assets publiés.
+- [x] Publier le premier état sur le dépôt GitHub privé avec la licence MIT et
+  l’avertissement de provenance des assets.
 - [x] Réinstaller Conan avec le Python actif et régénérer ses fichiers CMake.
 - [ ] Ajouter une CI Linux qui exécute Conan, CMake, le build et CTest.
 - [ ] Documenter ou fournir un profil Conan Emscripten.
