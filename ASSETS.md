@@ -5,15 +5,18 @@ créés pour ce projet. Elle ne place pas automatiquement les polices, images,
 sons ou musiques de `assets/` sous licence MIT.
 
 Ce document suit la **provenance** et les **conditions de redistribution** des
-assets. L'objectif du jalon P3 est simple : ne publier aucune ressource dont la
-source ou les conditions d'utilisation restent inconnues.
+assets. L'objectif du jalon P3 est de documenter explicitement la provenance,
+les contraintes connues et les éventuelles exceptions acceptées par le
+mainteneur avant publication.
 
 ## Convention de statut
 
 - 🟢 **prêt** : provenance et conditions documentées pour la distribution du jeu ;
 - 🟡 **documenté avec contrainte** : source connue, mais une condition de
   redistribution doit être respectée ;
-- 🟠 **à identifier** : provenance ou licence encore incomplète ;
+- 🟠 **provenance incomplète / risque accepté** : une information de provenance
+  ou de licence manque ; l'asset n'est conservé pour publication que si cette
+  décision est explicitement documentée ;
 - 🔴 **à remplacer** : ressource connue comme issue directement d'une œuvre
   tierce sans autorisation de redistribution documentée.
 
@@ -26,7 +29,7 @@ source ou les conditions d'utilisation restent inconnues.
 | SFX rétro générés | `walk.wav`, `dig.wav`, `rock_fall.wav`, `diamond.wav`, `death.wav`, `diamond_fall.wav` | 🟢 | Synthèse procédurale originale et déterministe par `tools/generate_retro_sfx.py`. Les anciens fichiers non publiables/insuffisamment sourcés ont été supprimés du HEAD ; les WAV sont générés par CMake et ne sont pas suivis par Git. Voir `assets/sfx/SOURCES.md`. |
 | Autres SFX procéduraux | `assets/sfx/exit_unlock.wav`, `assets/sfx/explosion.wav`, `assets/sfx/time_warning.wav` | 🟢 | Créations procédurales originales du projet ; distribuées avec le projet sous MIT. |
 | SFX Game Over | `assets/sfx/game-over-arcade-6435.mp3` | 🟡 | `Game Over Arcade`, myfox14 (Freesound), distribué via Pixabay sous Pixabay Content License. Voir `assets/sfx/SOURCES.md`. |
-| Musique du menu | `assets/theme/bd_theme_menu.ogg` | 🟠 | Le mainteneur se souvient l'avoir récupérée depuis une source annoncée comme libre d'utilisation, mais l'URL, l'auteur et la licence exacte ne sont plus connus. À retrouver ou remplacer avant publication publique. |
+| Musique du menu | `assets/theme/bd_theme_menu.ogg` | 🟠 | Le mainteneur se souvient l'avoir récupérée depuis une source annoncée comme libre d'utilisation, mais l'URL, l'auteur et la licence exacte ne sont plus connus. Le 12 août 2026, le mainteneur a explicitement décidé de conserver cet asset pour la publication et d'accepter le risque lié à cette traçabilité incomplète. |
 | Police UI | `assets/fonts/ui_font.ttf` | 🟢 | Noto Sans JP, SIL Open Font License 1.1. Une copie de la licence est fournie dans `assets/fonts/LICENSE.OFL.txt`. |
 
 ## Détail audio
@@ -85,6 +88,6 @@ Avant d'activer une publication publique :
 - [x] classer individuellement les six SFX initialement indéterminés ;
 - [x] remplacer les cinq captures CPC par des SFX procéduraux originaux et reproductibles ;
 - [x] remplacer le `death.wav` tiers insuffisamment sourcé par un SFX procédural original ;
-- [ ] documenter ou remplacer la musique du menu ;
+- [x] documenter la décision explicite de conserver la musique du menu malgré sa provenance incomplète ;
 - [x] confirmer la provenance du logo GotooCorp ;
-- [ ] vérifier qu'aucun asset 🟠 ou 🔴 n'est inclus dans l'artefact public final.
+- [x] vérifier qu'aucun asset 🔴 n'est inclus dans l'artefact public final et que l'unique exception 🟠 (`bd_theme_menu.ogg`) est volontaire et documentée.
