@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test du menu et du premier niveau WebAssembly."""
+"""Smoke test desktop et tactile de la version WebAssembly."""
 
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ def main() -> int:
             browser_type = getattr(playwright, args.browser)
             launch_args = ["--disable-gpu"] if args.browser == "chromium" else []
             browser = browser_type.launch(headless=True, args=launch_args)
+
             page = browser.new_page(viewport={"width": 1280, "height": 900})
             page.on("pageerror", lambda error: page_errors.append(str(error)))
             page.goto(url, wait_until="domcontentloaded", timeout=30_000)
@@ -130,6 +131,61 @@ def main() -> int:
             if args.screenshot:
                 args.screenshot.parent.mkdir(parents=True, exist_ok=True)
                 canvas.screenshot(path=args.screenshot)
+            page.close()
+
+            touch_context = browser.new_context(
+                viewport={"width": 390, "height": 844},
+                has_touch=True,
+            )
+            touch_page = touch_context.new_page()
+            touch_page.on("pageerror", lambda error: page_errors.append(str(error)))
+            touch_page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+            touch_page.wait_for_function(
+                "window.Module?.boulderdashState === 'menu'", timeout=30_000
+            )
+
+            touch_controls = touch_page.locator("#touch-controls")
+            if not touch_controls.is_visible():
+                raise RuntimeError("Les contrôles tactiles ne sont pas visibles sur un navigateur tactile")
+
+            touch_canvas_box = touch_page.locator("#canvas").bounding_box()
+            if touch_canvas_box is None or touch_canvas_box["width"] > 390:
+                raise RuntimeError(f"Canvas mobile hors viewport : {touch_canvas_box}")
+
+            down = touch_page.locator("[data-action='1']")
+            up = touch_page.locator("[data-action='0']")
+            confirm = touch_page.locator("[data-action='4']")
+            back = touch_page.locator("[data-action='5']")
+            start = touch_page.locator("[data-action='6']")
+
+            down.tap()
+            confirm.tap()
+            touch_page.wait_for_function(
+                "window.Module?.boulderdashState === 'options'", timeout=10_000
+            )
+            back.tap()
+            touch_page.wait_for_function(
+                "window.Module?.boulderdashState === 'menu'", timeout=10_000
+            )
+            up.tap()
+            confirm.tap()
+            touch_page.wait_for_function(
+                "window.Module?.boulderdashState === 'playing'", timeout=10_000
+            )
+            start.tap()
+            touch_page.wait_for_function(
+                "window.Module?.boulderdashState === 'paused'", timeout=10_000
+            )
+            start.tap()
+            touch_page.wait_for_function(
+                "window.Module?.boulderdashState === 'playing'", timeout=10_000
+            )
+            back.tap()
+            touch_page.wait_for_function(
+                "window.Module?.boulderdashState === 'paused'", timeout=10_000
+            )
+            touch_context.close()
+
             if page_errors:
                 raise RuntimeError("Erreurs JavaScript : " + " | ".join(page_errors))
             browser.close()
@@ -141,8 +197,8 @@ def main() -> int:
         thread.join(timeout=2)
 
     print(
-        f"Smoke test Web réussi avec {args.browser} : police TTF, japonais, volumes, pause/options et reprise "
-        f"({dimensions['width']}x{dimensions['height']})."
+        f"Smoke test Web réussi avec {args.browser} : clavier, tactile mobile, police TTF, japonais, "
+        f"volumes, pause/options et reprise ({dimensions['width']}x{dimensions['height']})."
     )
     return 0
 
